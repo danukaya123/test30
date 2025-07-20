@@ -1,8 +1,8 @@
 const { cmd } = require("../command");
-const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { launchWithSinhala } = require("./puppeteerSinhala"); // ✅ use local wrapper
 
 cmd({
   pattern: "ss",
@@ -19,13 +19,7 @@ cmd({
   try {
     reply("📸 Capturing screenshot, please wait...");
 
-    const browser = await puppeteer.launch({
-      headless: "new",
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 800 });
+    const { browser, page } = await launchWithSinhala(); // ✅ now Sinhala supported
     await page.goto(url, { waitUntil: "networkidle2", timeout: 45000 });
 
     const screenshotPath = path.join(os.tmpdir(), `screenshot-${Date.now()}.png`);
@@ -33,7 +27,8 @@ cmd({
 
     await browser.close();
 
-    const caption = `╭──〔 *📷 Website Screenshot* 〕──⬣
+    const caption = `
+╭〔 *📷 Website Screenshot* 〕─⬣
 ┃ 🌐 URL: ${url}
 ╰───────────────⬣`;
 
@@ -46,6 +41,6 @@ cmd({
     fs.unlinkSync(screenshotPath);
   } catch (err) {
     console.error("❌ Screenshot error:", err.message);
-    reply("❌ *Failed to capture the website.*\nPossible reasons:\n• Invalid or slow-loading site\n• Puppeteer crashed\n• URL is incorrect");
+    reply("❌ *Failed to capture the website.*\nMake sure the URL is valid and Sinhala fonts are installed.");
   }
 });
