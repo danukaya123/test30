@@ -258,7 +258,9 @@ seasons.forEach((season, i) => {
   seasonNumText = seasonNumText.toUpperCase(); // 🔠 Capitalize it
 
   // Stylized banner
-  tvSeriesListMessage += `\n━━━━━━ 📦 *${seasonNumText}* 📦 ━━━━━━\n`;
+  tvSeriesListMessage += `
+━━━━━━ 📦 *${seasonNumText}* 📦 ━━━━━━
+`;
 
   season.episodes.forEach((ep, j) => {
     const emojiIndex = (episodeMap.length + 1).toString().split('').map(n => numberEmojis[n]).join('');
@@ -468,8 +470,16 @@ filmDetailsMessage += `${emojiIndex1} *${cleanedQuality} - ${jsonResponse.fileSi
 const sentMessage1 = await conn.sendMessage(from, { 
 image:{url: `${film.imageUrl}`},
     caption: `${filmDetailsMessage}`,
-
-        }, { quoted: msg });
+  contextInfo: {
+    forwardingScore: 999,
+    isForwarded: true,
+    forwardedNewsletterMessageInfo: {
+      newsletterJid: channelJid,
+      newsletterName: channelName,
+      serverMessageId: -1,
+    },
+  },
+}, { quoted: msg });
 
 await conn.sendMessage(from, { react: { text: "✅", key: sentMessage1.key } });
 
@@ -506,6 +516,15 @@ if (["𝙷𝙴𝚁𝙾𝙺𝚄", "𝙺𝙾𝚈𝙴𝙱"].includes(hostname)) {
 
         
 await conn.sendMessage(from, {
+  contextInfo: {
+    forwardingScore: 999,
+    isForwarded: true,
+    forwardedNewsletterMessageInfo: {
+      newsletterJid: channelJid,
+      newsletterName: channelName,
+      serverMessageId: -1,
+    },
+  },
   text: `    ⌛ 𝗣𝗟𝗘𝗔𝗦𝗘 𝗪𝗔𝗜𝗧...
 ┃━━━━━━━━━━━━━━━━━━━━━━━⬣
 ┃ 🎬 *${film.filmName}*
@@ -516,6 +535,7 @@ await conn.sendMessage(from, {
 ┃━━━━━━━━━━━━━━━━━━━━━━━⬣
 ┃ 💡 *Tip:* Use Wi-Fi for fast downloads!
 ╰────────────────────────╯`
+  
 }, { quoted: msg1 });
 
 // 2. Send document with caption
@@ -523,6 +543,15 @@ await conn.sendMessage(from, {
   document: { url: `${jsonResponses[selectedIndex1].url}` },
   mimetype: "video/mp4",
   fileName: `${film.filmName}.mp4`,
+    contextInfo: {
+    forwardingScore: 999,
+    isForwarded: true,
+    forwardedNewsletterMessageInfo: {
+      newsletterJid: channelJid,
+      newsletterName: channelName,
+      serverMessageId: -1,
+    },
+  },
   caption: `╭━[ *✅DOWNLOAD COMPLETE✅* ]━⬣
 ┃━━━━━━━━━━━━━━━━━━━━━━━⬣
 ┃ 🎬 *${film.filmName}*
@@ -532,6 +561,7 @@ await conn.sendMessage(from, {
 ┃━━━━━━━━━━━━━━━━━━━━━━━⬣
 ┃ ⚙️ M A D E  W I T H ❤️  B Y 
 ╰─🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥─╯`
+  
 }, { quoted: msg1 });
 
 
