@@ -264,7 +264,9 @@ seasons.forEach((season, i) => {
 
   season.episodes.forEach((ep, j) => {
     const emojiIndex = (episodeMap.length + 1).toString().split('').map(n => numberEmojis[n]).join('');
-    tvSeriesListMessage += `${emojiIndex} *${ep.episodeTitle}* (${ep.episodeNumber})\n\n`;
+    tvSeriesListMessage += `${emojiIndex} *${ep.episodeTitle}* (${ep.episodeNumber})
+    
+`;
     episodeMap.push(ep);
   });
 });
@@ -343,7 +345,8 @@ let linkMsg = `╔════════════════════�
         const jsonResp = await fetchJsonData({ direct: true }, modified);
         epJsonResponses.push(jsonResp);
 
-        linkMsg += `${emoji} *${epLinks[i].quality} - ${jsonResp.fileSize}*\n`;
+        linkMsg += `${emoji} *${epLinks[i].quality} - ${jsonResp.fileSize}*
+`;
       }
 
       const sentQualMsg = await conn.sendMessage(from, {
@@ -380,6 +383,15 @@ let linkMsg = `╔════════════════════�
           }
         });
 await conn.sendMessage(from, {
+  contextInfo: {
+    forwardingScore: 999,
+    isForwarded: true,
+    forwardedNewsletterMessageInfo: {
+      newsletterJid: channelJid,
+      newsletterName: channelName,
+      serverMessageId: -1,
+    },
+  },
   text: `    ⌛ 𝗣𝗟𝗘𝗔𝗦𝗘 𝗪𝗔𝗜𝗧...
 ┃━━━━━━━━━━━━━━━━━━━━━━━⬣
 ┃ 🎬 *EPISODE:* ${epData.episodeTitle}
