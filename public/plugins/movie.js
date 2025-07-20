@@ -8,6 +8,8 @@ const headers1 = {
   'Referer': 'https://google.com',
 };
 
+const channelJid = "120363418166326365@newsletter";
+const channelName = "🍁 ＤＡＮＵＷＡ－ －ＭＤ 🍁";
 
 async function getMovieDetailsAndDownloadLinks(query) {
   try {
@@ -198,7 +200,15 @@ films.forEach((film, index) => {
     const sentMessage = await conn.sendMessage(from, { 
 image:{url: "https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/film.png?raw=true"},
     caption: `${filmListMessage}`,
-
+      contextInfo: {
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+          newsletterJid: channelJid,
+          newsletterName: channelName,
+          serverMessageId: -1,
+        },
+      },
         }, { quoted: mek });
     
 await conn.sendMessage(from, { react: { text: "✅", key: sentMessage.key } });
@@ -259,7 +269,16 @@ seasons.forEach((season, i) => {
 // Send as image with caption
 const sentEpMessage = await conn.sendMessage(from, {
   image: { url: 'https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/film.png?raw=true' },
-  caption: tvSeriesListMessage
+  caption: tvSeriesListMessage,
+        contextInfo: {
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+          newsletterJid: channelJid,
+          newsletterName: channelName,
+          serverMessageId: -1,
+        },
+      },
 }, { quoted: msg });
 
 await conn.sendMessage(from, { react: { text: "✅", key: sentEpMessage.key } });
@@ -327,7 +346,16 @@ let linkMsg = `╔════════════════════�
 
       const sentQualMsg = await conn.sendMessage(from, {
         image: { url: epData.episodeImage },
-        caption: linkMsg
+        caption: linkMsg,
+        contextInfo: {
+          forwardingScore: 999,
+          isForwarded: true,
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: channelJid,
+            newsletterName: channelName,
+            serverMessageId: -1,
+          },
+        },
       }, { quoted: msg2 });
 
     await conn.sendMessage(from, { react: { text: "✅", key: sentQualMsg.key } });
@@ -360,6 +388,7 @@ await conn.sendMessage(from, {
 ┃━━━━━━━━━━━━━━━━━━━━━━━⬣
 ┃ *💡Tip: Use Wi-Fi for fast downloads!*
 ╰────────────────────────╯`
+  
 }, { quoted: msg3 });
 const epCaption = `╭━[ *✅DOWNLOAD COMPLETE✅* ]━⬣
 ┃━━━━━━━━━━━━━━━━━━━━━━━⬣
@@ -376,6 +405,15 @@ await conn.sendMessage(from, {
   mimetype: "video/mp4",
   fileName: `${epData.episodeTitle}.mp4`,
   caption: epCaption,
+  contextInfo: {
+    forwardingScore: 999,
+    isForwarded: true,
+    forwardedNewsletterMessageInfo: {
+      newsletterJid: channelJid,
+      newsletterName: channelName,
+      serverMessageId: -1,
+    },
+  },
 }, { quoted: msg3 });
 
         await conn.sendMessage(from, { react: { text: "✅", key: msg3.key } });
