@@ -253,5 +253,8 @@
   },
   {
     "name": "termtestpapers.js"
+  },
+  {
+    "name": "screenshot.js"
   }
 ]
