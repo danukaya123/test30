@@ -121,7 +121,7 @@ cmd({
 
   const numberEmojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
   let msg = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗
-║     📘 ＭＯＤＥＬ ＰＡＰＥＲＳ 📘    ║
+║     🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁    ║
 ╚═━━━━━━━◢◤◆◥◣━━━━━━━━═╝
        *📘 ${type.toUpperCase()} MODEL PAPERS 📘*
 ┏━━━━━━━━━━━━━━━━━━━━━━┓
@@ -192,11 +192,11 @@ cmd({
       return reply("⚠️ No language options found.");
     }
 
-    let langMsg = `🌐 *AVAILABLE LANGUAGES FOR:*\n📝 _${selectedResult.title}_\n\n`;
+    let langMsg = `🌐 *AVAILABLE LANGUAGES FOR:*\n📝 *${selectedResult.title}*\n\n`;
     languages.forEach((l, i) => {
-      langMsg += `*${i + 1}.* ${l.lang}\n`;
+      langMsg += `*${i + 1}.* *${l.lang}*\n`;
     });
-    langMsg += `\n💬 _Reply with a number (1-${languages.length}) to download._`;
+    langMsg += `\n💬 *Reply with a number (1-${languages.length}) to download.*`;
 
     pendingModel[sender] = {
       step: "download",
