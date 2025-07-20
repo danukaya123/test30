@@ -13,6 +13,9 @@ const headers = {
 
 const pendingModel = {};
 const LOGO_IMAGE = "https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/educational__zone.png?raw=true";
+const channelJid = "120363418166326365@newsletter";
+const channelName = "🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁";
+
 
 const subjectAliases = {
   accounting: "accounting",
@@ -138,10 +141,20 @@ cmd({
   msg += `─────────────────────────
 💡 *Reply with a number to download.*`;
 
-  await danuwa.sendMessage(from, {
+  await robin.sendMessage(from, {
     caption: msg,
-    image: { url: LOGO_IMAGE }
-  }, { quoted: mek });
+    image: { url: LOGO_IMAGE },
+    contextInfo: {
+      forwardingScore: 999,
+      isForwarded: true,
+      forwardedNewsletterMessageInfo: {
+      newsletterJid: '120363418166326365@newsletter',
+      newsletterName: '🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁',
+      serverMessageId: -1,
+    },
+  }
+}, { quoted: mek });
+
 
   pendingModel[sender] = {
     step: "select",
