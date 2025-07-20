@@ -12,7 +12,7 @@ const headers = {
 };
 
 const pendingModel = {};
-const LOGO_IMAGE = "https://github.com/danuwac/DANUWA-BOT/blob/main/images/Alive.png?raw=true";
+const LOGO_IMAGE = "https://github.com/danuwac/DANUWA-BOT/blob/main/images/educational__zone.png?raw=true";
 
 const subjectAliases = {
   accounting: "accounting",
@@ -101,10 +101,10 @@ cmd({
   desc: "Download model papers by O/L or A/L and optional subject",
   category: "education",
   filename: __filename,
-}, async (robin, mek, m, { from, q, sender, reply }) => {
+}, async (danuwa, mek, m, { from, q, sender, reply }) => {
   if (!q) return reply("❌ Example: `.model o/l` or `.model a/l accounting`");
 
-  await robin.sendMessage(from, { react: { text: "📘", key: m.key } });
+  await danuwa.sendMessage(from, { react: { text: "📘", key: m.key } });
 
   const input = q.trim().toLowerCase().split(/\s+/);
   const type = input[0];
@@ -138,7 +138,7 @@ cmd({
   msg += `─────────────────────────
 💡 *Reply with a number to download.*`;
 
-  await robin.sendMessage(from, {
+  await danuwa.sendMessage(from, {
     caption: msg,
     image: { url: LOGO_IMAGE }
   }, { quoted: mek });
@@ -153,8 +153,8 @@ cmd({
 cmd({
   filter: (text, { sender }) =>
     pendingModel[sender] && pendingModel[sender].step === "select" && /^\d+$/.test(text.trim()),
-}, async (robin, mek, m, { from, body, sender, reply }) => {
-  await robin.sendMessage(from, { react: { text: "💬", key: m.key } });
+}, async (danuwa, mek, m, { from, body, sender, reply }) => {
+  await danuwa.sendMessage(from, { react: { text: "💬", key: m.key } });
 
   const pending = pendingModel[sender];
   const selected = parseInt(body.trim());
@@ -203,8 +203,8 @@ cmd({
 cmd({
   filter: (text, { sender }) =>
     pendingModel[sender] && pendingModel[sender].step === "download" && /^\d+$/.test(text.trim()),
-}, async (robin, mek, m, { from, body, sender, reply }) => {
-  await robin.sendMessage(from, { react: { text: "⬇️", key: m.key } });
+}, async (danuwa, mek, m, { from, body, sender, reply }) => {
+  await danuwa.sendMessage(from, { react: { text: "⬇️", key: m.key } });
 
   const pending = pendingModel[sender];
   const selected = parseInt(body.trim());
@@ -248,7 +248,7 @@ cmd({
     const pdfBuffer = fs.readFileSync(filePath);
     const niceName = `${pending.selected.title} - ${lang.lang}.pdf`;
 
-    const sentMsg = await robin.sendMessage(from, {
+    const sentMsg = await danuwa.sendMessage(from, {
       document: pdfBuffer,
       mimetype: "application/pdf",
       fileName: niceName,
@@ -258,7 +258,7 @@ cmd({
 ╰🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥`,
     }, { quoted: mek });
 
-    await robin.sendMessage(from, {
+    await danuwa.sendMessage(from, {
       react: { text: "✅", key: sentMsg.key },
     });
 
