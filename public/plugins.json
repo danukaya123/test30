@@ -232,5 +232,26 @@
   },
   {
     "name": "yts.js"
+  },
+  {
+    "name": "govdocother.js"
+  },
+  {
+    "name": "model.js"
+  },
+  {
+    "name": "ol.js"
+  },
+  {
+    "name": "paper.js"
+  },
+  {
+    "name": "pastpapers.js"
+  },
+  {
+    "name": "subjectvideos.js"
+  },
+  {
+    "name": "termtestpapers.js"
   }
 ]
