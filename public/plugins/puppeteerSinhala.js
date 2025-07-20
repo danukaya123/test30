@@ -1,4 +1,3 @@
-// plugins/puppeteerSinhala.js
 const puppeteer = require("puppeteer");
 
 async function launchWithSinhala() {
@@ -10,9 +9,17 @@ async function launchWithSinhala() {
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
 
-  // Inject Sinhala font support
+  // Inject Google Font for Sinhala (Noto Sans Sinhala)
+  await page.evaluate(() => {
+    const link = document.createElement('link');
+    link.href = "https://fonts.googleapis.com/css2?family=Noto+Sans+Sinhala&display=swap";
+    link.rel = "stylesheet";
+    document.head.appendChild(link);
+  });
+
+  // Apply the font globally via style tag
   await page.addStyleTag({
-    content: `* { font-family: "Noto Sans Sinhala", sans-serif !important; }`
+    content: `* { font-family: 'Noto Sans Sinhala', sans-serif !important; }`
   });
 
   return { browser, page };
