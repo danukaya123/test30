@@ -256,5 +256,8 @@
   },
   {
     "name": "screenshot.js"
+  },
+  {
+    "name": "puppeteerSinhala.js"
   }
 ]
