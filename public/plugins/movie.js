@@ -8,8 +8,9 @@ const headers1 = {
   'Referer': 'https://google.com',
 };
 
-const channelJid = "120363418166326365@newsletter";
-const channelName = "🍁 ＤＡＮＵＷＡ－ －ＭＤ 🍁";
+const channelJid = '120363418166326365@newsletter'; 
+const channelName = '🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁';
+const channelInvite = '0029Vb65OhH7oQhap1fG1y3o';
 
 async function getMovieDetailsAndDownloadLinks(query) {
   try {
