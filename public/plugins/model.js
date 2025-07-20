@@ -141,7 +141,7 @@ cmd({
   msg += `─────────────────────────
 💡 *Reply with a number to download.*`;
 
-  await robin.sendMessage(from, {
+  await danuwa.sendMessage(from, {
     caption: msg,
     image: { url: LOGO_IMAGE },
     contextInfo: {
