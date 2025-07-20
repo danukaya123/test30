@@ -12,7 +12,7 @@ const headers = {
 };
 
 const pendingModel = {};
-const LOGO_IMAGE = "https://github.com/danuwac/DANUWA-BOT/blob/main/images/educational__zone.png?raw=true";
+const LOGO_IMAGE = "https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/educational__zone.png?raw=true";
 
 const subjectAliases = {
   accounting: "accounting",
