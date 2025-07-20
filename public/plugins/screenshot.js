@@ -5,7 +5,8 @@ const path = require("path");
 const os = require("os");
 
 cmd({
-  pattern: "screenshot",
+  pattern: "ss",
+  react: "❤️",
   desc: "Take website screenshot",
   category: "tools",
   use: ".screenshot <url>",
@@ -49,7 +50,7 @@ cmd({
     const buffer = fs.readFileSync(screenshotPath);
     await robin.sendMessage(from, {
       image: buffer,
-      caption: `╭──〔 *📷 Website Screenshot* 〕──⬣
+      caption: `╭〔 *📷 Website Screenshot* 〕─⬣
 ┃ 🌐 URL: ${url}
 ╰───────────────⬣`
     }, { quoted: mek });
