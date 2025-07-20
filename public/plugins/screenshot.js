@@ -19,10 +19,14 @@ cmd({
   try {
     reply("📸 Capturing screenshot, please wait...");
 
-    const browser = await puppeteer.launch({ headless: "new" });
+    const browser = await puppeteer.launch({
+      headless: "new",
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 45000 });
 
     const screenshotPath = path.join(os.tmpdir(), `screenshot-${Date.now()}.png`);
     await page.screenshot({ path: screenshotPath, fullPage: true });
@@ -39,9 +43,9 @@ cmd({
       caption: caption,
     }, { quoted: mek });
 
-    fs.unlinkSync(screenshotPath); // clean up
+    fs.unlinkSync(screenshotPath);
   } catch (err) {
-    console.error("Screenshot error:", err);
-    reply("❌ Failed to capture the website. Make sure the URL is valid and try again.");
+    console.error("❌ Screenshot error:", err.message);
+    reply("❌ *Failed to capture the website.*\nPossible reasons:\n• Invalid or slow-loading site\n• Puppeteer crashed\n• URL is incorrect");
   }
 });
