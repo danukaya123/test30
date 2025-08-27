@@ -1,4 +1,4 @@
-const cmd = require('../command');
+const { cmd, commands } = require('../command')
 const puppeteer = require('puppeteer');
 const axios = require('axios');
 const fs = require('fs');
