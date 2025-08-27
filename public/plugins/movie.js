@@ -13,7 +13,15 @@ cmd({
 }, async (robin, mek, m, { from, q, reply }) => {
     if (!q) return reply("🔍 Provide a CineSubz movie page URL.");
 
-    const browser = await puppeteer.launch({ headless: true });
+    const browser = await puppeteer.launch({
+    headless: true,
+    args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-gpu',
+        '--disable-dev-shm-usage'
+    ]
+});
     const page = await browser.newPage();
     await page.goto(q, { waitUntil: "networkidle2" });
 
