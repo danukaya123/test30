@@ -8,6 +8,9 @@ const headers1 = {
   'Referer': 'https://google.com',
 };
 
+const channelJid = '120363418166326365@newsletter'; 
+const channelName = '🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁';
+const channelInvite = '0029Vb65OhH7oQhap1fG1y3o';
 
 async function getMovieDetailsAndDownloadLinks(query) {
   try {
@@ -31,17 +34,53 @@ async function getMovieDetailsAndDownloadLinks(query) {
       const $$ = cheerio.load(moviePageHtml);
       const downloadLinks = [];
 
+// Method 1: Try the specific selector
 $$('tr.clidckable-rowdd').each((i, el) => {
   const link = $$(el).attr('data-href');
   const quality = $$(el).find('td').eq(0).text().trim();
   const size = $$(el).find('td').eq(1).text().trim();
-  const lang = $$(el).find('td').eq(2).text().trim(); // optional
+  const lang = $$(el).find('td').eq(2).text().trim();
 
   if (link && quality && size) {
     downloadLinks.push({ link, quality, size, lang });
   }
 });
-      film.downloadLinks = downloadLinks;
+
+// Method 2: If no links found, try a more general approach
+if (downloadLinks.length === 0) {
+  console.log('Trying alternative selectors...');
+  
+  // Look for any table rows with data-href attribute
+  $$('tr[data-href]').each((i, el) => {
+    const link = $$(el).attr('data-href');
+    const quality = $$(el).find('td').eq(0).text().trim();
+    const size = $$(el).find('td').eq(1).text().trim();
+    const lang = $$(el).find('td').eq(2).text().trim();
+
+    if (link && quality) {
+      downloadLinks.push({ link, quality, size, lang });
+    }
+  });
+}
+
+// Method 3: If still no links, try finding download links by text content
+if (downloadLinks.length === 0) {
+  $$('a').each((i, el) => {
+    const href = $$(el).attr('href');
+    const text = $$(el).text().trim().toLowerCase();
+    
+    if (href && (text.includes('download') || text.includes('480p') || text.includes('720p') || text.includes('1080p'))) {
+      downloadLinks.push({ 
+        link: href, 
+        quality: text, 
+        size: 'Unknown', 
+        lang: 'Unknown' 
+      });
+    }
+  });
+}
+
+film.downloadLinks = downloadLinks;
     }
     return films;
   } catch (error) {
@@ -198,7 +237,15 @@ films.forEach((film, index) => {
     const sentMessage = await conn.sendMessage(from, { 
 image:{url: "https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/film.png?raw=true"},
     caption: `${filmListMessage}`,
-
+      contextInfo: {
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+          newsletterJid: channelJid,
+          newsletterName: channelName,
+          serverMessageId: -1,
+        },
+      },
         }, { quoted: mek });
     
 await conn.sendMessage(from, { react: { text: "✅", key: sentMessage.key } });
@@ -263,7 +310,16 @@ seasons.forEach((season, i) => {
 // Send as image with caption
 const sentEpMessage = await conn.sendMessage(from, {
   image: { url: 'https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/film.png?raw=true' },
-  caption: tvSeriesListMessage
+  caption: tvSeriesListMessage,
+        contextInfo: {
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+          newsletterJid: channelJid,
+          newsletterName: channelName,
+          serverMessageId: -1,
+        },
+      },
 }, { quoted: msg });
 
 await conn.sendMessage(from, { react: { text: "✅", key: sentEpMessage.key } });
@@ -332,7 +388,16 @@ let linkMsg = `╔════════════════════�
 
       const sentQualMsg = await conn.sendMessage(from, {
         image: { url: epData.episodeImage },
-        caption: linkMsg
+        caption: linkMsg,
+        contextInfo: {
+          forwardingScore: 999,
+          isForwarded: true,
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: channelJid,
+            newsletterName: channelName,
+            serverMessageId: -1,
+          },
+        },
       }, { quoted: msg2 });
 
     await conn.sendMessage(from, { react: { text: "✅", key: sentQualMsg.key } });
@@ -355,6 +420,15 @@ let linkMsg = `╔════════════════════�
           }
         });
 await conn.sendMessage(from, {
+  contextInfo: {
+    forwardingScore: 999,
+    isForwarded: true,
+    forwardedNewsletterMessageInfo: {
+      newsletterJid: channelJid,
+      newsletterName: channelName,
+      serverMessageId: -1,
+    },
+  },
   text: `    ⌛ 𝗣𝗟𝗘𝗔𝗦𝗘 𝗪𝗔𝗜𝗧...
 ┃━━━━━━━━━━━━━━━━━━━━━━━⬣
 ┃ 🎬 *EPISODE:* ${epData.episodeTitle}
@@ -365,6 +439,7 @@ await conn.sendMessage(from, {
 ┃━━━━━━━━━━━━━━━━━━━━━━━⬣
 ┃ *💡Tip: Use Wi-Fi for fast downloads!*
 ╰────────────────────────╯`
+  
 }, { quoted: msg3 });
 const epCaption = `╭━[ *✅DOWNLOAD COMPLETE✅* ]━⬣
 ┃━━━━━━━━━━━━━━━━━━━━━━━⬣
@@ -381,6 +456,15 @@ await conn.sendMessage(from, {
   mimetype: "video/mp4",
   fileName: `${epData.episodeTitle}.mp4`,
   caption: epCaption,
+  contextInfo: {
+    forwardingScore: 999,
+    isForwarded: true,
+    forwardedNewsletterMessageInfo: {
+      newsletterJid: channelJid,
+      newsletterName: channelName,
+      serverMessageId: -1,
+    },
+  },
 }, { quoted: msg3 });
 
         await conn.sendMessage(from, { react: { text: "✅", key: msg3.key } });
@@ -435,8 +519,16 @@ filmDetailsMessage += `${emojiIndex1} *${cleanedQuality} - ${jsonResponse.fileSi
 const sentMessage1 = await conn.sendMessage(from, { 
 image:{url: `${film.imageUrl}`},
     caption: `${filmDetailsMessage}`,
-
-        }, { quoted: msg });
+  contextInfo: {
+    forwardingScore: 999,
+    isForwarded: true,
+    forwardedNewsletterMessageInfo: {
+      newsletterJid: channelJid,
+      newsletterName: channelName,
+      serverMessageId: -1,
+    },
+  },
+}, { quoted: msg });
 
 await conn.sendMessage(from, { react: { text: "✅", key: sentMessage1.key } });
 
@@ -473,6 +565,15 @@ if (["𝙷𝙴𝚁𝙾𝙺𝚄", "𝙺𝙾𝚈𝙴𝙱"].includes(hostname)) {
 
         
 await conn.sendMessage(from, {
+  contextInfo: {
+    forwardingScore: 999,
+    isForwarded: true,
+    forwardedNewsletterMessageInfo: {
+      newsletterJid: channelJid,
+      newsletterName: channelName,
+      serverMessageId: -1,
+    },
+  },
   text: `    ⌛ 𝗣𝗟𝗘𝗔𝗦𝗘 𝗪𝗔𝗜𝗧...
 ┃━━━━━━━━━━━━━━━━━━━━━━━⬣
 ┃ 🎬 *${film.filmName}*
@@ -483,6 +584,7 @@ await conn.sendMessage(from, {
 ┃━━━━━━━━━━━━━━━━━━━━━━━⬣
 ┃ 💡 *Tip:* Use Wi-Fi for fast downloads!
 ╰────────────────────────╯`
+  
 }, { quoted: msg1 });
 
 // 2. Send document with caption
@@ -490,6 +592,15 @@ await conn.sendMessage(from, {
   document: { url: `${jsonResponses[selectedIndex1].url}` },
   mimetype: "video/mp4",
   fileName: `${film.filmName}.mp4`,
+    contextInfo: {
+    forwardingScore: 999,
+    isForwarded: true,
+    forwardedNewsletterMessageInfo: {
+      newsletterJid: channelJid,
+      newsletterName: channelName,
+      serverMessageId: -1,
+    },
+  },
   caption: `╭━[ *✅DOWNLOAD COMPLETE✅* ]━⬣
 ┃━━━━━━━━━━━━━━━━━━━━━━━⬣
 ┃ 🎬 *${film.filmName}*
@@ -499,6 +610,7 @@ await conn.sendMessage(from, {
 ┃━━━━━━━━━━━━━━━━━━━━━━━⬣
 ┃ ⚙️ M A D E  W I T H ❤️  B Y 
 ╰─🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥─╯`
+  
 }, { quoted: msg1 });
 
 
