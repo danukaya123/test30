@@ -1,8 +1,8 @@
-const { cmd } = require('../command');
+const { cmd, commands } = require('../command')
 const axios = require('axios');
 const cheerio = require('cheerio');
 const puppeteer = require('puppeteer');
-const os = require('os');
+
 
 const headers1 = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
@@ -10,240 +10,613 @@ const headers1 = {
   'Referer': 'https://google.com',
 };
 
-const channelJid = '120363418166326365@newsletter';
+const channelJid = '120363418166326365@newsletter'; 
 const channelName = '🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁';
-
-const sessionStates = new Map();
-
-function toEmojiNumber(n) {
-  const numberEmojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
-  return n.toString().split('').map(d => numberEmojis[d] || d).join('');
-}
+const channelInvite = '0029Vb65OhH7oQhap1fG1y3o';
 
 async function getMovieDetailsAndDownloadLinks(query) {
   try {
-    const resp = await axios.get(`https://cinesubz.lk/?s=${encodeURIComponent(query)}`, {
-      headers: headers1, maxRedirects: 5
-    });
-    const $ = cheerio.load(resp.data);
+    const searchResponse = await axios.get(`https://cinesubz.lk/?s=${encodeURIComponent(query)}`, { headers: headers1 });
+    const $ = cheerio.load(searchResponse.data);
+
     const films = [];
-
-    $('article').each((_, el) => {
-      const filmName = $(el).find('.details .title a').text().trim();
-      const imageUrl = $(el).find('.image .thumbnail img').attr('src');
-      const description = $(el).find('.details .contenido p').text().trim();
-      const year = $(el).find('.details .meta .year').text().trim();
-      const imdb = $(el).find('.details .meta .rating:first').text().replace('IMDb', '').trim();
-      const movieLink = $(el).find('.image .thumbnail a').attr('href');
-
-      if (filmName && movieLink) {
-        films.push({ filmName, imageUrl, description, year, imdb, movieLink });
-      }
+    $('article').each((i, element) => {
+      const filmName = $(element).find('.details .title a').text().trim();
+      const imageUrl = $(element).find('.image .thumbnail img').attr('src');
+      const description = $(element).find('.details .contenido p').text().trim();
+      const year = $(element).find('.details .meta .year').text().trim();
+      const imdbText = $(element).find('.details .meta .rating:first').text().trim();
+      const imdb = imdbText.replace('IMDb', '').trim();
+      const movieLink = $(element).find('.image .thumbnail a').attr('href');
+      films.push({ filmName, imageUrl, description, year, imdb, movieLink });
     });
 
-    return films;
-  } catch (e) {
-    console.error('Error fetching film list:', e);
-    return [];
-  }
-}
-
-async function fetchQualityOptions(url) {
-  try {
-    const browser = await puppeteer.launch({ headless: true });
+    // Step 2: Use Puppeteer to get download links
+    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle2' });
-    await page.waitForSelector('tr.clidckable-rowdd');
+    await page.setUserAgent(headers1['User-Agent']);
+    
+    for (const film of films) {
+      await page.goto(film.movieLink, { waitUntil: 'networkidle2' });
 
-    const qualities = await page.$$eval('tr.clidckable-rowdd', rows =>
-      rows.map((row, i) => {
-        const quality = row.querySelector('td:nth-child(1)')?.innerText.trim() || 'Unknown';
-        const size = row.querySelector('td:nth-child(2)')?.innerText.trim() || 'Unknown';
-        const lang = row.querySelector('td:nth-child(3)')?.innerText.trim() || '';
-        const url = row.getAttribute('data-href');
-        return { index: i + 1, quality, size, lang, url };
-      })
-    );
+      // Wait for download table to appear
+      await page.waitForSelector('tr.clidckable-rowdd', { timeout: 5000 }).catch(() => console.log('⚠️ No links table found'));
+
+      const downloadLinks = await page.$$eval('tr.clidckable-rowdd', rows =>
+        rows.map(row => {
+          const link = row.getAttribute('data-href');
+          const tds = row.querySelectorAll('td');
+          const quality = tds[0]?.innerText?.trim() || null;
+          const size = tds[1]?.innerText?.trim() || null;
+          const lang = tds[2]?.innerText?.trim() || null;
+          return link && quality && size ? { link, quality, size, lang } : null;
+        }).filter(Boolean)
+      );
+
+      film.downloadLinks = downloadLinks;
+      console.log(`✅ Found ${downloadLinks.length} links for ${film.filmName}`);
+    }
 
     await browser.close();
-    return qualities;
-  } catch (e) {
-    console.error('Error fetching qualities via Puppeteer:', e);
+    return films;
+
+  } catch (error) {
+    console.error('❌ Error occurred:', error.message);
     return [];
   }
 }
 
 async function scrapeModifiedLink(url) {
   try {
-    const resp = await axios.get(url, { headers: headers1, maxRedirects: 5 });
-    const $ = cheerio.load(resp.data);
-    let link = $('#link').attr('href');
-    if (!link) return url;
-
-    const mapping = [
-      { search: ['https://google.com/server11/1:/','https://google.com/server12/1:/','https://google.com/server13/1:/'], replace: 'https://drive2.cscloud12.online/server1/' },
-      { search: ['https://google.com/server21/1:/','https://google.com/server22/1:/','https://google.com/server23/1:/'], replace: 'https://drive2.cscloud12.online/server2/' },
-      { search: ['https://google.com/server3/1:/'], replace: 'https://drive2.cscloud12.online/server3/' },
-      { search: ['https://google.com/server4/1:/'], replace: 'https://drive2.cscloud12.online/server4/' }
+    const response = await axios.get(url, { headers1, maxRedirects: 5 });
+    const $ = cheerio.load(response.data);
+    let modifiedLink = $('#link').attr('href');
+    if (!modifiedLink) {
+      console.log("⚠️ Modified link not found!");
+      return url; 
+    }
+    const urlMappings = [
+      { search: ["https://google.com/server11/1:/", "https://google.com/server12/1:/", "https://google.com/server13/1:/"], replace: "https://drive2.cscloud12.online/server1/" },
+      { search: ["https://google.com/server21/1:/", "https://google.com/server22/1:/", "https://google.com/server23/1:/"], replace: "https://drive2.cscloud12.online/server2/" },
+      { search: ["https://google.com/server3/1:/"], replace: "https://drive2.cscloud12.online/server3/" },
+      { search: ["https://google.com/server4/1:/"], replace: "https://drive2.cscloud12.online/server4/" }
     ];
-
-    mapping.forEach(m =>
-      m.search.forEach(s =>
-        { if (link.includes(s)) link = link.replace(s, m.replace); }
-      )
-    );
-
-    link = link
-      .replace('.mp4?bot=cscloud2bot&code=', '?ext=mp4&bot=cscloud2bot&code=')
-      .replace('.mp4', '?ext=mp4')
-      .replace('.mkv?bot=cscloud2bot&code=', '?ext=mkv&bot=cscloud2bot&code=')
-      .replace('.mkv', '?ext=mkv')
-      .replace('.zip', '?ext=zip');
-
-    return link;
-  } catch (e) {
-    console.error('Error in scrapeModifiedLink:', e);
-    return url;
+    urlMappings.forEach(mapping => {
+      mapping.search.forEach(searchUrl => {
+        if (modifiedLink.includes(searchUrl)) {
+          modifiedLink = modifiedLink.replace(searchUrl, mapping.replace);
+        }
+      });
+    });
+        modifiedLink = modifiedLink.replace(".mp4?bot=cscloud2bot&code=", "?ext=mp4&bot=cscloud2bot&code=")
+                               .replace(".mp4", "?ext=mp4")
+                               .replace(".mkv?bot=cscloud2bot&code=", "?ext=mkv&bot=cscloud2bot&code=")
+                               .replace(".mkv", "?ext=mkv")
+                               .replace(".zip", "?ext=zip");
+    return modifiedLink;
+  } catch (error) {
+    console.error("❌ Error fetching the page:", error.message);
+    return url; 
   }
 }
+
+async function getTvSeriesSeasonsAndEpisodes(url) {
+  try {
+    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
+    
+    await page.goto(url, { waitUntil: 'networkidle2' });
+
+    // Wait for episodes container
+    await page.waitForSelector('#episodes .se-c', { timeout: 5000 }).catch(() => console.log('⚠️ No episodes container found'));
+
+    const seasons = await page.$$eval('#episodes .se-c', seasonElems =>
+      seasonElems.map((seasonElem, i) => {
+        const seasonNumberElem = seasonElem.querySelector('.se-q .se-t');
+        const seasonNumber = (seasonNumberElem?.innerText?.trim()) || `Season ${i + 1}`;
+
+        const episodeElems = seasonElem.querySelectorAll('ul.episodios li');
+        const episodes = Array.from(episodeElems).map(epElem => {
+          const a = epElem.querySelector('a.episode-link');
+          const episodeUrl = a?.href || null;
+          const episodeNumber = epElem.querySelector('.numerando')?.innerText?.trim() || null;
+          const episodeTitle = epElem.querySelector('.episodiotitle')?.innerText?.trim() || null;
+          const episodeImage = epElem.querySelector('img')?.src || null;
+
+          return { episodeNumber, episodeTitle, episodeUrl, episodeImage };
+        }).filter(ep => ep.episodeUrl); // only keep valid episodes
+
+        return { seasonNumber, episodes };
+      })
+    );
+
+    await browser.close();
+    return seasons;
+
+  } catch (err) {
+    console.error('❌ Error fetching TV series seasons/episodes:', err.message);
+    return [];
+  }
+}
+
+
 
 async function fetchJsonData(data, url) {
   try {
-    const resp = await axios.post(url, data, { headers: { 'Content-Type': 'application/json' }, maxRedirects: 5 });
-    const htmlResp = await axios.get(url);
-    const $ = cheerio.load(htmlResp.data);
-    const fileSize = $('p.file-info:contains("File Size") span').text().trim() || 'Unknown';
-    resp.data.fileSize = fileSize;
-    return resp.data;
-  } catch (e) {
-    console.error('Error in fetchJsonData:', e);
-    return { error: e.message };
+    const response = await axios.post(url, data, { 
+      headers: { "Content-Type": "application/json" }, 
+      maxRedirects: 5 
+    });
+    const htmlResponse = await axios.get(url);
+    const $ = cheerio.load(htmlResponse.data);
+    const fileSize = $('p.file-info:contains("File Size") span').text().trim();
+    response.data.fileSize = fileSize || "Unknown";
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error fetching JSON data:", error.message);
+    return { error: error.message };
   }
 }
 
+
 cmd({
-  pattern: 'film',
-  alias: ['movie','cinesub'],
-  use: '.film <query>',
-  desc: 'Search and download movies',
-  category: 'download',
+  pattern: "film",
+  alias: ["movie","cinesub"],
+  use: ".film <query>",
+  desc: "Search and download movies",
+  category: "download",
   filename: __filename
 }, async (conn, mek, m, { from, args, q, reply }) => {
-  if (!q) return reply('🔎 Please provide a film name.');
+  try {
+    if (!q) return reply('🔎 Please provide a film name.');
+    
+    await m.react('🎬');
 
-  await m.react('🎬');
-  const films = await getMovieDetailsAndDownloadLinks(q);
-  if (!films.length) return reply('❌ No movies found.');
-
-  const listLines = films.map((f, idx) => `${toEmojiNumber(idx+1)} *${f.filmName}*\n`).join('');
-  const listMsg = `╔═━━━━ MOVIE LIST ━━━━╗\n${listLines}Choose by number (emoji reply).`;
-  const sent = await conn.sendMessage(from, {
-    image: { url: 'https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/film.png?raw=true' },
-    caption: listMsg,
-    contextInfo: {
-      forwardingScore: 999,
-      isForwarded: true,
-      forwardedNewsletterMessageInfo: {
-        newsletterJid: channelJid,
-        newsletterName: channelName,
-        serverMessageId: -1
-      }
+    
+    const os = require('os');
+    let hostname;
+    const hostNameLength = os.hostname().length;
+    
+    if (hostNameLength === 12) {
+      hostname = "𝚁𝙴𝙿𝙻𝙸𝚃";
+    } else if (hostNameLength === 36) {
+      hostname = "𝙷𝙴𝚁𝙾𝙺𝚄";
+    } else if (hostNameLength === 8) {
+      hostname = "𝙺𝙾𝚈𝙴𝙱";
+    } else {
+      hostname = "𝚅𝙿𝚂 || 𝚄𝙽𝙺𝙽𝙾𝚆𝙽";
     }
-  }, { quoted: m });
 
-  sessionStates.set(from, { step: 'choose_movie', films, messageId: sent.key.id });
+
+                
+    const films = await getMovieDetailsAndDownloadLinks(q);
+    
+    if (films.length === 0) {
+      return reply('❌ No movies found for your query.');
+    }
+
+
+let filmListMessage = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
+║     🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁    ║          
+╚═━━━━━━━◢◤◆◥◣━━━━━━━━═╝  
+    📂 𝗠𝗢𝗩𝗜𝗘 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥 📂  
+┏━━━━━━━━━━━━━━━━━━━━━━┓  
+┃ 🔰 𝗖𝗛𝗢𝗢𝗦𝗘 𝗬𝗢𝗨𝗥 MOVIE         
+┃ *💬 REPLY TO NUMBER ❕*  
+┗━━━━━━━━━━━━━━━━━━━━━━┛  
+┃   ⚙️ M A D E  W I T H ❤️ B Y 
+╰─🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥─╯
+─────────────────────────
+
+`;
+const numberEmojis = ["0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"];
+
+films.forEach((film, index) => {
+  let adjustedIndex = index + 1; 
+  let emojiIndex = adjustedIndex.toString().split("").map(num => numberEmojis[num]).join("");
+  filmListMessage += `${emojiIndex} *${film.filmName}*
+  
+`;
 });
 
-conn.ev.on('messages.upsert', async msgUp => {
-  const msg = msgUp.messages[0];
-  if (!msg.message?.extendedTextMessage) return;
 
-  const from = msg.key.remoteJid;
-  const session = sessionStates.get(from);
-  if (!session) return;
-
-  const serial = msg.message.extendedTextMessage.text.trim();
-  const choice = parseInt(serial) - 1;
-
-  // Movie selection
-  if (session.step === 'choose_movie' && choice >= 0 && choice < session.films.length && msg.message.extendedTextMessage.contextInfo?.stanzaId === session.messageId) {
-    await conn.sendMessage(from, { react: { text: '❤️', key: msg.key } });
-    const film = session.films[choice];
-    session.film = film;
-
-    const qualities = await fetchQualityOptions(film.movieLink);
-    if (!qualities.length) {
-      await conn.sendMessage(from, { text: '❌ No quality options found.' }, { quoted: msg });
-      sessionStates.delete(from);
-      return;
-    }
-
-    let qList = `─ Select Quality for *${film.filmName}* ─\n`;
-    qualities.forEach(q => {
-      qList += `${toEmojiNumber(q.index)} *${q.quality}* — ${q.size}\n`;
-    });
-
-    const sentQ = await conn.sendMessage(from, {
-      image: { url: film.imageUrl || 'https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/film.png?raw=true' },
-      caption: qList,
+    const sentMessage = await conn.sendMessage(from, { 
+image:{url: "https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/film.png?raw=true"},
+    caption: `${filmListMessage}`,
       contextInfo: {
         forwardingScore: 999,
         isForwarded: true,
         forwardedNewsletterMessageInfo: {
           newsletterJid: channelJid,
           newsletterName: channelName,
-          serverMessageId: -1
+          serverMessageId: -1,
+        },
+      },
+        }, { quoted: mek });
+    
+await conn.sendMessage(from, { react: { text: "✅", key: sentMessage.key } });
+            
+        conn.ev.on('messages.upsert', async (msgUpdate) => {
+      const msg = msgUpdate.messages[0];
+      if (!msg.message || !msg.message.extendedTextMessage) return;
+
+      const selectedOption = msg.message.extendedTextMessage.text.trim();
+
+      if (msg.message.extendedTextMessage.contextInfo && msg.message.extendedTextMessage.contextInfo.stanzaId === sentMessage.key.id) {
+        const selectedIndex = parseInt(selectedOption.trim()) - 1;
+
+        if (selectedIndex >= 0 && selectedIndex < films.length) {
+
+  await conn.sendMessage(from, { react: { text: "❤️", key: msg.key } });
+          
+
+                                                                      const film = films[selectedIndex];
+
+if (!film.downloadLinks || film.downloadLinks.length === 0) {
+   const seasons = await getTvSeriesSeasonsAndEpisodes(film.movieLink);
+
+  if (seasons.length === 0) {
+    return conn.sendMessage(from, { text: "❌ No episodes found for this TV series." }, { quoted: msg });
+  }
+let tvSeriesListMessage = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
+║     🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁    ║          
+╚═━━━━━━━◢◤◆◥◣━━━━━━━━═╝  
+ 🎞️ 𝗧𝗩 𝗦𝗘𝗥𝗜𝗘𝗦 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥 🎞️  
+┏━━━━━━━━━━━━━━━━━━━━━━┓  
+┃ 🔰 𝗖𝗛𝗢𝗢𝗦𝗘 𝗬𝗢𝗨𝗥 𝗘𝗣𝗜𝗦𝗢𝗗𝗘         
+┃ *💬 REPLY TO NUMBER ❕* 
+┗━━━━━━━━━━━━━━━━━━━━━━┛  
+┃   ⚙️ M A D E  W I T H ❤️ B Y 
+╰─🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥─╯
+─────────────────────────
+
+`;
+
+const numberEmojis = ["0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"];
+
+const episodeMap = [];
+seasons.forEach((season, i) => {
+  const rawSeason = season.seasonNumber?.trim() || '';
+  let seasonNumText = /^\d+$/.test(rawSeason) ? `Season ${rawSeason}` : rawSeason || `Season ${i + 1}`;
+  seasonNumText = seasonNumText.toUpperCase(); // 🔠 Capitalize it
+
+  // Stylized banner
+  tvSeriesListMessage += `
+━━━━━━ 📦 *${seasonNumText}* 📦 ━━━━━━
+`;
+
+  season.episodes.forEach((ep, j) => {
+    const emojiIndex = (episodeMap.length + 1).toString().split('').map(n => numberEmojis[n]).join('');
+    tvSeriesListMessage += `${emojiIndex} *${ep.episodeTitle}* (${ep.episodeNumber})
+    
+`;
+    episodeMap.push(ep);
+  });
+});
+// Send as image with caption
+const sentEpMessage = await conn.sendMessage(from, {
+  image: { url: 'https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/film.png?raw=true' },
+  caption: tvSeriesListMessage,
+        contextInfo: {
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+          newsletterJid: channelJid,
+          newsletterName: channelName,
+          serverMessageId: -1,
+        },
+      },
+}, { quoted: msg });
+
+await conn.sendMessage(from, { react: { text: "✅", key: sentEpMessage.key } });
+
+  conn.ev.on('messages.upsert', async (msgUpdate2) => {
+    const msg2 = msgUpdate2.messages[0];
+    if (!msg2.message || !msg2.message.extendedTextMessage) return;
+
+    const selectedEp = parseInt(msg2.message.extendedTextMessage.text.trim());
+
+    if (
+      msg2.message.extendedTextMessage.contextInfo &&
+      msg2.message.extendedTextMessage.contextInfo.stanzaId === sentEpMessage.key.id
+    ) {
+      const epData = episodeMap[selectedEp - 1];
+      if (!epData) {
+        return conn.sendMessage(from, { text: "❌ Invalid episode number." }, { quoted: msg2 });
+      }
+    await conn.sendMessage(from, { react: { text: "❤️", key: msg2.key } });
+
+      // Now fetch download links from the episode page
+      const epPage = await axios.get(epData.episodeUrl, { headers: headers1 });
+      const $$ = cheerio.load(epPage.data);
+      const epLinks = [];
+
+      $$('tr.clidckable-rowdd').each((i, el) => {
+        const link = $$(el).attr('data-href');
+        const quality = $$(el).find('td').eq(0).text().trim();
+        const size = $$(el).find('td').eq(1).text().trim();
+        if (link && quality && size) {
+          epLinks.push({ link, quality, size });
+        }
+      });
+
+      if (epLinks.length === 0) {
+        return conn.sendMessage(from, { text: "⚠️ No download links found for this episode." }, { quoted: msg2 });
+      }
+let linkMsg = `╔═══════════════════════╗
+║     *📣 DOWNLOAD QUALITY 📣*     ║
+╚═══════════════════════╝
+🎬  *${epData.episodeTitle}*  (${epData.episodeNumber})
+┏━━━━━━━━━━━━━━━━━━━━━━┓  
+┃ ⚠️ *NOTE:*        
+┃ *🔸 Please select a number* 
+┃    *corresponding to the quality* 
+┃ *🔸 Larger sizes may take longer to* 
+┃    *download*
+┗━━━━━━━━━━━━━━━━━━━━━━┛ 
+*💡Tip: Use Wi-Fi for fast downloads!*
+─────────────────────────
+*📝CHOOSE EPISODE QUALITY❕👀*
+─────────────────────────
+
+`;
+      const epJsonResponses = [];
+
+      for (let i = 0; i < epLinks.length; i++) {
+        const emoji = (i + 1).toString().split("").map(n => numberEmojis[n]).join("");
+        const modified = await scrapeModifiedLink(epLinks[i].link);
+        const jsonResp = await fetchJsonData({ direct: true }, modified);
+        epJsonResponses.push(jsonResp);
+
+        linkMsg += `${emoji} *${epLinks[i].quality} - ${jsonResp.fileSize}*
+`;
+      }
+
+      const sentQualMsg = await conn.sendMessage(from, {
+        image: { url: epData.episodeImage },
+        caption: linkMsg,
+        contextInfo: {
+          forwardingScore: 999,
+          isForwarded: true,
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: channelJid,
+            newsletterName: channelName,
+            serverMessageId: -1,
+          },
+        },
+      }, { quoted: msg2 });
+
+    await conn.sendMessage(from, { react: { text: "✅", key: sentQualMsg.key } });
+
+      conn.ev.on('messages.upsert', async (msgUpdate3) => {
+        const msg3 = msgUpdate3.messages[0];
+        if (!msg3.message || !msg3.message.extendedTextMessage) return;
+
+        const choice = parseInt(msg3.message.extendedTextMessage.text.trim());
+        if (
+          msg3.message.extendedTextMessage.contextInfo &&
+          msg3.message.extendedTextMessage.contextInfo.stanzaId === sentQualMsg.key.id
+        ) {
+          const chosenFile = epJsonResponses[choice - 1];
+          if (!chosenFile?.url) return conn.sendMessage(from, { text: "❌ Invalid quality." }, { quoted: msg3 });
+        await conn.sendMessage(from, {
+          react: {
+            text: "❤️",
+            key: msg3.key
+          }
+        });
+await conn.sendMessage(from, {
+  contextInfo: {
+    forwardingScore: 999,
+    isForwarded: true,
+    forwardedNewsletterMessageInfo: {
+      newsletterJid: channelJid,
+      newsletterName: channelName,
+      serverMessageId: -1,
+    },
+  },
+  text: `    ⌛ 𝗣𝗟𝗘𝗔𝗦𝗘 𝗪𝗔𝗜𝗧...
+┃━━━━━━━━━━━━━━━━━━━━━━━⬣
+┃ 🎬 *EPISODE:* ${epData.episodeTitle}
+┃ 🎞️ *NUMBER:* ${epData.episodeNumber}
+┃━━━━━━━━━━━━━━━━━━━━━━━⬣
+┃ ❤️ Preparing your download...
+┃ 🔃 This may take a few seconds.
+┃━━━━━━━━━━━━━━━━━━━━━━━⬣
+┃ *💡Tip: Use Wi-Fi for fast downloads!*
+╰────────────────────────╯`
+  
+}, { quoted: msg3 });
+const epCaption = `╭━[ *✅DOWNLOAD COMPLETE✅* ]━⬣
+┃━━━━━━━━━━━━━━━━━━━━━━━⬣
+┃ 🎬 *${film.filmName}*
+┃ 🎞️ *${epData.episodeTitle}*
+┃ 📅 *Season/Episode:* ${epData.episodeNumber}
+┃ 💾 *Size:* ${chosenFile.fileSize}
+┃━━━━━━━━━━━━━━━━━━━━━━━⬣ 
+┃   ⚙️ M A D E  W I T H ❤️ B Y 
+╰─🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥─╯`;
+
+await conn.sendMessage(from, {
+  document: { url: chosenFile.url },
+  mimetype: "video/mp4",
+  fileName: `${epData.episodeTitle}.mp4`,
+  caption: epCaption,
+  contextInfo: {
+    forwardingScore: 999,
+    isForwarded: true,
+    forwardedNewsletterMessageInfo: {
+      newsletterJid: channelJid,
+      newsletterName: channelName,
+      serverMessageId: -1,
+    },
+  },
+}, { quoted: msg3 });
+
+        await conn.sendMessage(from, { react: { text: "✅", key: msg3.key } });
+        }
+      });
+    }
+  });
+
+  return; // prevent movie logic from running
+}
+
+let filmDetailsMessage = `─────────────────────────        
+🎬  *${film.filmName}*  (${film.year})
+─────────────────────────
+⭐️  *IMDb Rating:* ${film.imdb}
+📝  *Description:*
+${film.description}
+
+`;
+
+
+const filteredDownloadLinks = film.downloadLinks.filter(dl => !dl.quality.includes("Telegram"));
+
+let jsonResponses = []; 
+
+if (filteredDownloadLinks.length > 0) {
+    filmDetailsMessage += `─────────────────────────
+📝CHOOSE MOVIE QUALITY❕👀
+─────────────────────────
+    
+`;
+
+    const numberEmojis1 = ["0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"];
+
+    for (const [index, dl] of filteredDownloadLinks.entries()) {
+        const emojiIndex1 = (index + 1).toString().split("").map(num => numberEmojis1[num]).join(""); 
+
+        const modifiedLink = await scrapeModifiedLink(dl.link);
+        const jsonResponse = await fetchJsonData({ direct: true }, modifiedLink);
+
+jsonResponses.push(jsonResponse);
+
+        if (!jsonResponse.url) continue; 
+        let cleanedQuality = dl.quality.replace(/(SD|HD|BluRay|FHD|WEBRip|WEB-DL|WEBDL|Direct)/gi, "").trim(); 
+
+filmDetailsMessage += `${emojiIndex1} *${cleanedQuality} - ${jsonResponse.fileSize}*
+`;
+      
+     }
+} 
+
+const sentMessage1 = await conn.sendMessage(from, { 
+image:{url: `${film.imageUrl}`},
+    caption: `${filmDetailsMessage}`,
+  contextInfo: {
+    forwardingScore: 999,
+    isForwarded: true,
+    forwardedNewsletterMessageInfo: {
+      newsletterJid: channelJid,
+      newsletterName: channelName,
+      serverMessageId: -1,
+    },
+  },
+}, { quoted: msg });
+
+await conn.sendMessage(from, { react: { text: "✅", key: sentMessage1.key } });
+
+
+
+conn.ev.on('messages.upsert', async (msgUpdate) => {
+    const msg1 = msgUpdate.messages[0];
+    if (!msg1.message || !msg1.message.extendedTextMessage) return;
+
+    const selectedOption = msg1.message.extendedTextMessage.text.trim();
+
+    if (msg1.message.extendedTextMessage.contextInfo && msg1.message.extendedTextMessage.contextInfo.stanzaId === sentMessage1.key.id) {
+        const selectedIndex1 = parseInt(selectedOption) - 1;
+
+        if (selectedIndex1 >= 0 && selectedIndex1 < jsonResponses.length) {
+
+await conn.sendMessage(from, { react: { text: "⬇️", key: msg1.key } });
+
+           
+  if (!jsonResponses[selectedIndex1].url) {
+    await conn.sendMessage(from, { react: { text: "❌", key: msg1.key } });
+    await conn.sendMessage(from, { text: "❌ Invalid selection. Please select a valid number." }, { quoted: msg1 });
+    return;
+}          
+             
+
+if (["𝙷𝙴𝚁𝙾𝙺𝚄", "𝙺𝙾𝚈𝙴𝙱"].includes(hostname)) {
+    await conn.sendMessage(from, { react: { text: "⭕", key: msg1.key } });
+    await conn.sendMessage(from, { text: `⭕ *Cannot send large files on ${hostname}.*
+    
+    ⚠️ This platform has restrictions on sending large media files. Please use a VPS or a suitable server.` }, { quoted: msg1 });
+    return;
+}
+
+        
+await conn.sendMessage(from, {
+  contextInfo: {
+    forwardingScore: 999,
+    isForwarded: true,
+    forwardedNewsletterMessageInfo: {
+      newsletterJid: channelJid,
+      newsletterName: channelName,
+      serverMessageId: -1,
+    },
+  },
+  text: `    ⌛ 𝗣𝗟𝗘𝗔𝗦𝗘 𝗪𝗔𝗜𝗧...
+┃━━━━━━━━━━━━━━━━━━━━━━━⬣
+┃ 🎬 *${film.filmName}*
+┃ 📅 *Year:* ${film.year}
+┃━━━━━━━━━━━━━━━━━━━━━━━⬣
+┃ ❤️ Preparing your download...
+┃ 🔃 This may take a few seconds.
+┃━━━━━━━━━━━━━━━━━━━━━━━⬣
+┃ 💡 *Tip:* Use Wi-Fi for fast downloads!
+╰────────────────────────╯`
+  
+}, { quoted: msg1 });
+
+// 2. Send document with caption
+await conn.sendMessage(from, {
+  document: { url: `${jsonResponses[selectedIndex1].url}` },
+  mimetype: "video/mp4",
+  fileName: `${film.filmName}.mp4`,
+    contextInfo: {
+    forwardingScore: 999,
+    isForwarded: true,
+    forwardedNewsletterMessageInfo: {
+      newsletterJid: channelJid,
+      newsletterName: channelName,
+      serverMessageId: -1,
+    },
+  },
+  caption: `╭━[ *✅DOWNLOAD COMPLETE✅* ]━⬣
+┃━━━━━━━━━━━━━━━━━━━━━━━⬣
+┃ 🎬 *${film.filmName}*
+┃ 📅 *Year:* ${film.year}
+┃ ⭐ *IMDb:* ${film.imdb}
+┃ 💾 *Size:* ${jsonResponses[selectedIndex1].fileSize}
+┃━━━━━━━━━━━━━━━━━━━━━━━⬣
+┃ ⚙️ M A D E  W I T H ❤️  B Y 
+╰─🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥─╯`
+  
+}, { quoted: msg1 });
+
+
+await conn.sendMessage(from, { react: { text: "✅", key: msg1.key } });
+
+        } else {
+            await conn.sendMessage(from, { react: { text: "❌", key: msg1.key } });
+            await conn.sendMessage(from, { text: "❌ Invalid selection. Please select a valid number." }, { quoted: msg1 });
+        }
+    }
+});                                                                                                                                   } else {
+            await conn.sendMessage(from, { react: { text: "❌", key: msg.key } });
+            await conn.sendMessage(from, { text: "❌ Invalid selection. Please select a valid number." }, { quoted: msg });
         }
       }
-    }, { quoted: msg });
+    });
 
-    session.step = 'choose_quality';
-    session.qualities = qualities;
-    session.messageId = sentQ.key.id;
-    sessionStates.set(from, session);
-  }
-
-  // Quality selection
-  else if (session.step === 'choose_quality' && msg.message.extendedTextMessage.contextInfo?.stanzaId === session.messageId) {
-    const qualities = session.qualities;
-    const idx = parseInt(serial) - 1;
-    if (idx < 0 || idx >= qualities.length) {
-      await conn.sendMessage(from, { react: { text: '❌', key: msg.key } });
-      await conn.sendMessage(from, { text: '❌ Invalid choice.' }, { quoted: msg });
-      return;
-    }
-
-    await conn.sendMessage(from, { react: { text: '⬇️', key: msg.key } });
-    const chosen = qualities[idx];
-
-    const modified = await scrapeModifiedLink(chosen.url);
-    const info = await fetchJsonData({ direct: true }, modified);
-    if (!info.url) {
-      await conn.sendMessage(from, { text: '❌ Cannot fetch download URL.' }, { quoted: msg });
-      sessionStates.delete(from);
-      return;
-    }
-
-    const ext = info.url.split('.').pop().split('?')[0];
-    const mimetype = ext === 'mkv' ? 'video/x-matroska' : ext === 'zip' ? 'application/zip' : 'video/mp4';
-
-    await conn.sendMessage(from, {
-      text: 'Preparing your download... ⌛'
-    }, { quoted: msg });
-
-    if (['𝙷𝙴𝚁𝙾𝙺𝚄','𝙺𝙾𝚈𝙴𝙱'].includes((os.hostname().length === 36 && "𝙷𝙴𝚁𝙾𝙺𝚄") || (os.hostname().length === 8 && "𝙺𝙾𝚈𝙴𝙱"))) {
-      await conn.sendMessage(from, { text: `Platform restricts large files—use another server.` }, { quoted: msg });
-      sessionStates.delete(from);
-      return;
-    }
-
-    await conn.sendMessage(from, {
-      document: { url: info.url },
-      mimetype,
-      fileName: `${session.film.filmName}.${ext}`,
-      caption: `✅ Download Complete: *${session.film.filmName}*\nSize: ${info.fileSize}`
-    }, { quoted: msg });
-
-    sessionStates.delete(from);
+  } catch (error) {
+    console.error(error);
+    reply('⚠️ An error occurred while searching for films.');
   }
 });
