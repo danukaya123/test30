@@ -61,14 +61,6 @@ cmd({
         const channelJid = '120363418166326365@newsletter'; 
         const channelName = '🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁';
 
-                const tempImagePath = path.join(__dirname, '../images/Alive.png');
-
-        // ------------------ Download image locally ------------------
-         // require inside function if needed
-        if (!fs.existsSync(tempImagePath)) { // only download if not exists
-            const { data } = await axios.get(aliveImg, { responseType: 'arraybuffer' });
-            fs.writeFileSync(tempImagePath, Buffer.from(data));
-        }
 
         const aliveCaption = `╭─────── ⭓ ⭓ ⭓  ─────────╮
 │          🧿 SYSTEM ONLINE 🧿       │
@@ -99,12 +91,15 @@ cmd({
             }, { quoted: mek });
         }
 
+        await danuwa.sendMessage (from, {
+            image: {url: aliveImg)
+        }, { quoted: mek });
+        
+
         // ------------------ Send Image + Buttons ------------------
 await sendButtons(danuwa, from, {
-    image: tempImagePath,      // local file path
     text: aliveCaption,        // caption
-    buttons: buttons,          // your buttons array
-    footer: "🌀 DANUWA-MD",    // optional footer
+    buttons,          // your buttons array
     contextInfo: {             // keep your context info here
         forwardingScore: 999,
         isForwarded: true,
