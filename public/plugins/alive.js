@@ -90,7 +90,7 @@ cmd({
 
         // ------------------ Send Image + Buttons ------------------
         await sendButtons(danuwa, from, {
-            image: {url: aliveImg},
+            image: aliveImg,
             text: aliveCaption,
             buttons,
             contextInfo: {
