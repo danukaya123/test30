@@ -90,7 +90,8 @@ cmd({
 
         // ------------------ Send Image + Buttons ------------------
         await sendButtons(danuwa, from, {
-            text: aliveCaption,
+            image: {url: "aliveImg"},
+            caption: aliveCaption,
             buttons,
             contextInfo: {
                 forwardingScore: 999,
@@ -103,14 +104,6 @@ cmd({
             }
         }, { quoted: mek });
 
-        // ------------------ Send Voice ------------------
-        if (fs.existsSync(voicePath)) {
-            await danuwa.sendMessage(from, {
-                audio: fs.readFileSync(voicePath),
-                mimetype: 'audio/ogg; codecs=opus',
-                ptt: true
-            }, { quoted: mek });
-        }
 
         // ------------------ Mini Reply Handler ------------------
         const body = extractBody(mek, m);
