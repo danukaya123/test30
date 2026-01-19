@@ -53,7 +53,7 @@ cmd({
         const userName = m.pushName || "User";
 
         const videoPath = path.join(__dirname, "../media/0908.mp4");
-        const aliveImg = 'https://github.com/dcd21865/DANUWA-BOT/blob/main/images/alive.png?raw=true'; 
+        const aliveImg = 'https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/Alive.png?raw=true'; 
         const voicePath = './media/alive.ogg'; 
 
         const channelJid = '120363418166326365@newsletter'; 
