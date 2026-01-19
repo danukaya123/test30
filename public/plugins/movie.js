@@ -7,6 +7,7 @@ const pendingSearch = {};
 const pendingQuality = {};
 const channelJid = '120363418166326365@newsletter'; 
 const channelName = '🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁';
+const imageUrl = "https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/film.png?raw=true";
 
 // ---------- Helpers ----------
 function normalizeQuality(text) {
@@ -167,7 +168,7 @@ cmd({
     📂 𝗠𝗢𝗩𝗜𝗘 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥 📂  
 ┏━━━━━━━━━━━━━━━━━━━━━━┓  
 ┃ 🔰 𝗖𝗛𝗢𝗢𝗦𝗘 𝗬𝗢𝗨𝗥 MOVIE         
-┃ 💬 *Found ${searchResults.length} movies for "${q}"*❕  
+┃ 💬 *FOUND ${searchResults.length} MOVIES FOR "${q}"*❕  
 ┗━━━━━━━━━━━━━━━━━━━━━━┛  
 ┃━━━━━━━━━━━━━━━━━━━━━━✦
 ┃   ⚙️ M A D E  W I T H ❤️ B Y 
@@ -175,7 +176,11 @@ cmd({
 
 ─────────────────────────
 `;
-
+    
+await danuwa.sendMessage(from, {
+  image: { url: imageUrl },
+  }, { quoted: mek });
+    
     await sendInteractiveMessage(danuwa, from, {
       text: caption,
       interactiveButtons,
@@ -191,7 +196,7 @@ cmd({
     📂 𝗠𝗢𝗩𝗜𝗘 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥 📂  
 ┏━━━━━━━━━━━━━━━━━━━━━━┓  
 ┃ 🔰 𝗖𝗛𝗢𝗢𝗦𝗘 𝗬𝗢𝗨𝗥 MOVIE         
-┃ 💬 *Found ${searchResults.length} movies for "${q}"*❕  
+┃ 💬 *FOUND ${searchResults.length} MOVIES FOR "${q}"*❕    
 ┗━━━━━━━━━━━━━━━━━━━━━━┛  
 ┃━━━━━━━━━━━━━━━━━━━━━━✦
 ┃   ⚙️ M A D E  W I T H ❤️ B Y 
@@ -212,7 +217,7 @@ cmd({
 
   filmListMessage += `*📝 Reply with movie number (1-${searchResults.length})*`;
 
- const imageUrl = "https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/film.png?raw=true";
+
 
 await danuwa.sendMessage(from, {
   image: { url: imageUrl },
@@ -234,6 +239,10 @@ await danuwa.sendMessage(from, {
 cmd({
   filter: (text, { sender }) => pendingSearch[sender] && !isNaN(text) && parseInt(text) > 0 && parseInt(text) <= pendingSearch[sender].results.length
 }, async (danuwa, mek, m, { body, sender, reply, from }) => {
+
+    await danuwa.sendMessage(from, {
+    react: { text: "✅", key: m.key }
+  });
   const index = parseInt(body) - 1;
   const selected = pendingSearch[sender].results[index];
   delete pendingSearch[sender];
@@ -254,7 +263,19 @@ cmd({
 *විනාඩියක් ඉන්න Quality List එක එවනකම් 😶‍🌫️*`;
 
   if (metadata.thumbnail) {
-    await danuwa.sendMessage(from, { image: { url: metadata.thumbnail }, caption: msg }, { quoted: mek });
+    await danuwa.sendMessage(from, { 
+      image: { url: metadata.thumbnail }, 
+      caption: msg,
+                contextInfo: {           
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+            newsletterJid: channelJid,
+            newsletterName: channelName,
+            serverMessageId: -1
+        }
+    }
+    }, { quoted: mek });
   } else {
     await danuwa.sendMessage(from, { text: msg }, { quoted: mek });
   }
@@ -268,7 +289,7 @@ cmd({
   if (config.BUTTON) {
     // Buttons mode
     const buttons = downloadLinks.map((d, i) => ({ id: `${i+1}`, text: `🎞️ ${d.quality} (${d.size})` }));
-    await sendButtons(danuwa, from, { text: "*─────────────────────────\n *📝CHOOSE MOVIE QUALITY❕👀*\n ─────────────────────────", buttons }, { quoted: mek });
+    await sendButtons(danuwa, from, { text: "─────────────────────────\n *📝CHOOSE MOVIE QUALITY❕👀*\n ─────────────────────────", buttons }, { quoted: mek });
   } else {
     // Plain text mode
     let text = `─────────────────────────
@@ -287,6 +308,10 @@ cmd({
 cmd({
   filter: (text, { sender }) => pendingQuality[sender] && !isNaN(text) && parseInt(text) > 0 && parseInt(text) <= pendingQuality[sender].movie.downloadLinks.length
 }, async (danuwa, mek, m, { body, sender, reply, from }) => {
+
+      await danuwa.sendMessage(from, {
+    react: { text: "✅", key: m.key }
+  });
   const index = parseInt(body) - 1;
   const { movie } = pendingQuality[sender];
   delete pendingQuality[sender];
