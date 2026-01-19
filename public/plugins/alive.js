@@ -92,7 +92,7 @@ cmd({
         }
 
         await danuwa.sendMessage (from, {
-            image: {url: aliveImg)
+            image: {url: aliveImg}
         }, { quoted: mek });
         
 
