@@ -89,20 +89,23 @@ cmd({
         }
 
         // ------------------ Send Image + Buttons ------------------
-        await sendButtons(danuwa, from, {
-            image: aliveImg,
-            text: aliveCaption,
-            buttons,
-            contextInfo: {
-                forwardingScore: 999,
-                isForwarded: true,
-                forwardedNewsletterMessageInfo: {
-                    newsletterJid: channelJid,
-                    newsletterName: channelName,
-                    serverMessageId: -1
-                }
-            }
-        }, { quoted: mek });
+await danuwa.sendMessage(from, {
+    image: { url: aliveImg },
+    caption: aliveCaption,
+    footer: "🌀 DANUWA-MD",
+    buttons: buttons,
+    headerType: 4,
+    contextInfo: {
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+            newsletterJid: channelJid,
+            newsletterName: channelName,
+            serverMessageId: -1
+        }
+    }
+}, { quoted: mek });
+
 
 
         // ------------------ Mini Reply Handler ------------------
