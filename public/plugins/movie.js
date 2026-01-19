@@ -258,7 +258,6 @@ cmd({
 *⭐ IMDb:* ${metadata.imdb}
 *🎭 Genres:* ${metadata.genres.join(", ")}
 *🎥 Directors:* ${metadata.directors.join(", ")}
-*🌟 Stars:* ${metadata.stars.slice(0,5).join(", ")}${metadata.stars.length>5?"...":""}
 ───────────────────────── 
 *විනාඩියක් ඉන්න Quality List එක එවනකම් 😶‍🌫️*`;
 
@@ -288,7 +287,7 @@ cmd({
 
   if (config.BUTTON) {
     // Buttons mode
-    const buttons = downloadLinks.map((d, i) => ({ id: `${i+1}`, text: `🎞️ ${d.quality} (${d.size})` }));
+    const buttons = downloadLinks.map((d, i) => ({ id: `${i+1}`, text: `💡 ${d.quality} (${d.size})` }));
     await sendButtons(danuwa, from, { text: "─────────────────────────\n *📝CHOOSE MOVIE QUALITY❕👀*\n ─────────────────────────", buttons }, { quoted: mek });
   } else {
     // Plain text mode
