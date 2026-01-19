@@ -5,6 +5,11 @@ const os = require('os');
 const fs = require('fs');
 const path = require("path");
 
+
+const tempImagePath = path.join(__dirname, '../images/Alive.png');
+const { data } = await axios.get(aliveImg, { responseType: 'arraybuffer' });
+fs.writeFileSync(tempImagePath, Buffer.from(data));
+
 // ------------------ Helper: Uptime ------------------
 const formatUptime = (seconds) => {
     const pad = (s) => (s < 10 ? '0' + s : s);
@@ -90,11 +95,11 @@ cmd({
 
         // ------------------ Send Image + Buttons ------------------
 await sendButtons(danuwa, from, {
-    image: aliveImg,   // just the URL string
-    text: aliveCaption, // caption
-    buttons: buttons,   // your button array
-    footer: "🌀 DANUWA-MD", // optional footer
-    contextInfo: {
+    image: tempImagePath,      // local file path
+    text: aliveCaption,        // caption
+    buttons: buttons,          // your buttons array
+    footer: "🌀 DANUWA-MD",    // optional footer
+    contextInfo: {             // keep your context info here
         forwardingScore: 999,
         isForwarded: true,
         forwardedNewsletterMessageInfo: {
