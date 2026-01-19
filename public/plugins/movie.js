@@ -5,6 +5,8 @@ const config = require("../config");
 
 const pendingSearch = {};
 const pendingQuality = {};
+const channelJid = '120363418166326365@newsletter'; 
+const channelName = '🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁';
 
 // ---------- Helpers ----------
 function normalizeQuality(text) {
@@ -135,7 +137,6 @@ cmd({
   filename: __filename
 }, async (danuwa, mek, m, { from, q, sender, reply }) => {
   if (!q) return reply(`*🎬 Movie Search Plugin*\nUsage: movie_name\nExample: movie avengers`);
-  reply("*🔍 Searching for movies...*");
 
   const searchResults = await searchMovies(q);
   if (!searchResults.length) return reply("*❌ No movies found!*");
@@ -160,12 +161,19 @@ cmd({
       }
     ];
 
-    const caption = `
-╭─────── ⭓ ⭓ ⭓  ─────────╮
-│       🎬 SEARCH RESULTS 🎬      │
-╰──────────────⟡───────╯
-Found ${searchResults.length} movies for "${q}".
-Select a movie from the menu below:
+    const caption = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
+║     🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁    ║          
+╚═━━━━━━━◢◤◆◥◣━━━━━━━━═╝  
+    📂 𝗠𝗢𝗩𝗜𝗘 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥 📂  
+┏━━━━━━━━━━━━━━━━━━━━━━┓  
+┃ 🔰 𝗖𝗛𝗢𝗢𝗦𝗘 𝗬𝗢𝗨𝗥 MOVIE         
+┃ 💬 *Found ${searchResults.length} movies for "${q}"*❕  
+┗━━━━━━━━━━━━━━━━━━━━━━┛  
+┃━━━━━━━━━━━━━━━━━━━━━━✦
+┃   ⚙️ M A D E  W I T H ❤️ B Y 
+╰─🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥─╯
+
+─────────────────────────
 `;
 
     await sendInteractiveMessage(danuwa, from, {
@@ -176,12 +184,49 @@ Select a movie from the menu below:
 
   } else {
     // -------- Plain Text Reply --------
-    let text = "*🎬 Search Results:*\n";
-    searchResults.forEach((m, i) => {
-      text += `*${i+1}.* ${m.title}\n   📝 Language: ${m.language}\n   📊 Quality: ${m.quality}\n   🎞️ Format: ${m.qty}\n`;
-    });
-    text += `\n*Reply with movie number (1-${searchResults.length})*`;
-    reply(text);
+  const numberEmojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
+  let filmListMessage = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
+║     🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁    ║          
+╚═━━━━━━━◢◤◆◥◣━━━━━━━━═╝  
+    📂 𝗠𝗢𝗩𝗜𝗘 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥 📂  
+┏━━━━━━━━━━━━━━━━━━━━━━┓  
+┃ 🔰 𝗖𝗛𝗢𝗢𝗦𝗘 𝗬𝗢𝗨𝗥 MOVIE         
+┃ 💬 *Found ${searchResults.length} movies for "${q}"*❕  
+┗━━━━━━━━━━━━━━━━━━━━━━┛  
+┃━━━━━━━━━━━━━━━━━━━━━━✦
+┃   ⚙️ M A D E  W I T H ❤️ B Y 
+╰─🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥─╯
+
+─────────────────────────`;
+
+  searchResults.forEach((movie, index) => {
+    let adjustedIndex = index + 1;
+    let emojiIndex = adjustedIndex
+      .toString()
+      .split("")
+      .map(num => numberEmojis[num])
+      .join("");
+
+    filmListMessage += `${emojiIndex} *${movie.title}*\n\n`;
+  });
+
+  filmListMessage += `*📝 Reply with movie number (1-${searchResults.length})*`;
+
+ const imageUrl = "https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/film.png?raw=true";
+
+await danuwa.sendMessage(from, {
+  image: { url: imageUrl },
+  caption: filmListMessage,
+          contextInfo: {           
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+            newsletterJid: channelJid,
+            newsletterName: channelName,
+            serverMessageId: -1
+        }
+    }
+}, { quoted: mek });
   }
 });
 
@@ -193,10 +238,20 @@ cmd({
   const selected = pendingSearch[sender].results[index];
   delete pendingSearch[sender];
 
-  reply("*🔄 Fetching movie metadata...*");
+  reply("*පොඩ්ඩක් ඉදහම් Film එකේ විස්තර ටික එවන්නම්...👀❤️‍🩹*");
   const metadata = await getMovieMetadata(selected.movieUrl);
 
-  let msg = `*🎬 ${metadata.title}*\n*📝 Language:* ${metadata.language}\n*⏱️ Duration:* ${metadata.duration}\n*⭐ IMDb:* ${metadata.imdb}\n*🎭 Genres:* ${metadata.genres.join(", ")}\n*🎥 Directors:* ${metadata.directors.join(", ")}\n*🌟 Stars:* ${metadata.stars.slice(0,5).join(", ")}${metadata.stars.length>5?"...":""}\n\n*🔄 Fetching download links...*`;
+  let msg = `───────────────────────── 
+*🎬 ${metadata.title}*
+───────────────────────── 
+*📝 Language:* ${metadata.language}
+*⏱️ Duration:* ${metadata.duration}
+*⭐ IMDb:* ${metadata.imdb}
+*🎭 Genres:* ${metadata.genres.join(", ")}
+*🎥 Directors:* ${metadata.directors.join(", ")}
+*🌟 Stars:* ${metadata.stars.slice(0,5).join(", ")}${metadata.stars.length>5?"...":""}
+───────────────────────── 
+*විනාඩියක් ඉන්න Quality List එක එවනකම් 😶‍🌫️*`;
 
   if (metadata.thumbnail) {
     await danuwa.sendMessage(from, { image: { url: metadata.thumbnail }, caption: msg }, { quoted: mek });
@@ -213,10 +268,13 @@ cmd({
   if (config.BUTTON) {
     // Buttons mode
     const buttons = downloadLinks.map((d, i) => ({ id: `${i+1}`, text: `🎞️ ${d.quality} (${d.size})` }));
-    await sendButtons(danuwa, from, { text: "*📌 Select quality:*", footer: "Movie Downloader", buttons }, { quoted: mek });
+    await sendButtons(danuwa, from, { text: "*─────────────────────────\n *📝CHOOSE MOVIE QUALITY❕👀*\n ─────────────────────────", buttons }, { quoted: mek });
   } else {
     // Plain text mode
-    let text = "*📌 Available Qualities:*\n";
+    let text = `─────────────────────────
+📝CHOOSE MOVIE QUALITY❕👀
+─────────────────────────
+`;
     downloadLinks.forEach((d, i) => {
       text += `${i+1}. ${d.quality} (${d.size})\n`;
     });
@@ -234,7 +292,7 @@ cmd({
   delete pendingQuality[sender];
 
   const selectedLink = movie.downloadLinks[index];
-  reply(`*⬇️ Sending ${selectedLink.quality} movie as document...*`);
+  reply(`*ඔයාගෙ ${selectedLink.quality} movie එක Document එකක් විදියට එවන්නම් ඉන්න 🙌*`);
 
   try {
     const directUrl = getDirectPixeldrainUrl(selectedLink.link);
@@ -242,7 +300,22 @@ cmd({
       document: { url: directUrl },
       mimetype: "video/mp4",
       fileName: `${movie.metadata.title.substring(0,50)} - ${selectedLink.quality}.mp4`.replace(/[^\w\s.-]/gi,''),
-      caption: `*🎬 ${movie.metadata.title}*\n*📊 Quality:* ${selectedLink.quality}\n*💾 Size:* ${selectedLink.size}\n\n*Enjoy your movie! 🍿*`
+      caption: `───────────────────────── 
+*🎬 ${movie.metadata.title}*
+───────────────────────── 
+*📊 Quality:* ${selectedLink.quality}
+*💾 Size:* ${selectedLink.size}
+─────────────────────────        
+🚀 Pow. By *DANUKA DISANAYAKA* 🔥`,
+        contextInfo: {       
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+            newsletterJid: channelJid,
+            newsletterName: channelName,
+            serverMessageId: -1
+        }
+    }
     }, { quoted: mek });
   } catch (error) {
     console.error("Send document error:", error);
