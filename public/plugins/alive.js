@@ -90,10 +90,6 @@ cmd({
                 ptv: true
             }, { quoted: mek });
         }
-
-        await danuwa.sendMessage (from, {
-            image: {url: aliveImg}
-        }, { quoted: mek });
         
 
         // ------------------ Send Image + Buttons ------------------
