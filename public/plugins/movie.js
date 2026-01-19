@@ -1,10 +1,11 @@
 const { cmd } = require("../command");
-const { sendButtons } = require("gifted-btns");
+const { sendButtons, sendInteractiveMessage } = require("gifted-btns");
 const puppeteer = require("puppeteer");
 
 const pendingSearch = {};
 const pendingQuality = {};
 
+// ---------- Helper functions ----------
 function normalizeQuality(text) {
   if (!text) return null;
   text = text.toUpperCase();
@@ -120,7 +121,7 @@ async function getPixeldrainLinks(movieUrl) {
   return links;
 }
 
-/* ================= COMMANDS ================= */
+// ================= COMMANDS =================
 
 cmd({
   pattern: "movie",
@@ -138,29 +139,29 @@ cmd({
 
   pendingSearch[sender] = { results: searchResults, timestamp: Date.now() };
 
-const rows = searchResults.map((movie, i) => ({
-  id: `${i+1}`, // will still use pendingSearch[sender] index
-  title: movie.title,
-  description: `Language: ${movie.language} | Quality: ${movie.quality} | Format: ${movie.qty}`
-}));
+  // ------------------ Single Select Menu ------------------
+  const rows = searchResults.map((movie, i) => ({
+    id: `${i+1}`, // will trigger pendingSearch handler
+    title: movie.title,
+    description: `Language: ${movie.language} | Quality: ${movie.quality} | Format: ${movie.qty}`
+  }));
 
-const interactiveButtons = [
-  {
-    name: "single_select",
-    buttonParamsJson: JSON.stringify({
-      title: "Movie Search Results",
-      sections: [
-        {
-          title: "Select a movie",
-          rows
-        }
-      ]
-    })
-  }
-];
+  const interactiveButtons = [
+    {
+      name: "single_select",
+      buttonParamsJson: JSON.stringify({
+        title: "Movie Search Results",
+        sections: [
+          {
+            title: "Select a movie",
+            rows
+          }
+        ]
+      })
+    }
+  ];
 
-// Alive-style caption for search results
-const caption = `
+  const caption = `
 ╭─────── ⭓ ⭓ ⭓  ─────────╮
 │       🎬 SEARCH RESULTS 🎬      │
 ╰──────────────⟡───────╯
@@ -168,14 +169,14 @@ Found ${searchResults.length} movies for "${q}".
 Select a movie from below menu to continue:
 `;
 
-await sendInteractiveMessage(danuwa, from, {
-  text: caption,
-  interactiveButtons,
-  quoted: mek
+  await sendInteractiveMessage(danuwa, from, {
+    text: caption,
+    interactiveButtons,
+    quoted: mek
+  });
 });
 
-/* ======= REPLY HANDLER: MOVIE SELECTION ======= */
-
+// ---------- REPLY HANDLER: MOVIE SELECTION ----------
 cmd({
   filter: (text, { sender }) => pendingSearch[sender] && !isNaN(text) && parseInt(text) > 0 && parseInt(text) <= pendingSearch[sender].results.length
 }, async (danuwa, mek, m, { body, sender, reply, from }) => {
@@ -217,7 +218,7 @@ cmd({
   }).catch(e => console.error("Download links error:", e));
 });
 
-
+// ---------- QUALITY SELECTION ----------
 cmd({
   filter: (text, { sender }) => pendingQuality[sender] && !isNaN(text) && parseInt(text) > 0 && parseInt(text) <= pendingQuality[sender].movie.downloadLinks.length
 }, async (danuwa, mek, m, { body, sender, reply, from }) => {
@@ -244,8 +245,7 @@ cmd({
   }
 });
 
-/* ================= CLEANUP ================= */
-
+// ---------- CLEANUP ----------
 setInterval(() => {
   const now = Date.now();
   const timeout = 10*60*1000;
