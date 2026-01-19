@@ -89,12 +89,11 @@ cmd({
         }
 
         // ------------------ Send Image + Buttons ------------------
-await danuwa.sendMessage(from, {
-    image: { url: aliveImg },
-    caption: aliveCaption,
-    footer: "🌀 DANUWA-MD",
-    buttons: buttons,
-    headerType: 4,
+await sendButtons(danuwa, from, {
+    image: aliveImg,   // just the URL string
+    text: aliveCaption, // caption
+    buttons: buttons,   // your button array
+    footer: "🌀 DANUWA-MD", // optional footer
     contextInfo: {
         forwardingScore: 999,
         isForwarded: true,
