@@ -135,7 +135,7 @@ for (let i = 0; i < zippedParts.length; i++) {
 }
         
       await danuwa.sendMessage(from, {
-        text: "ඔන්න ඔක්කම එව්වා ❤️‍🩹👀";
+        text: "ඔන්න ඔක්කම එව්වා ❤️‍🩹👀",
       });
 
         console.log("[DEBUG] Cleaning temp files...");
@@ -167,5 +167,6 @@ for (let i = 0; i < zippedParts.length; i++) {
     }
   }
 );
+
 
 
