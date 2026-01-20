@@ -3,24 +3,23 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 const splitFile = require("split-file");
+const archiver = require("archiver");
 const mime = require("mime-types");
 const cheerio = require("cheerio");
 
 const TEMP_DIR = "./temp";
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
 
-// Extract file ID from Google Drive URL
+// Extract Google Drive file ID
 function extractDriveId(url) {
   const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
   return match ? match[1] : null;
 }
 
-// Get download URL (handle download anyway form)
+// Get download URL (handles "Download anyway" page)
 async function getDriveDownloadUrl(fileId) {
   const baseUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
   const res = await axios.get(baseUrl, { responseType: "text" });
-
-  // Look for download form
   const $ = cheerio.load(res.data);
   const form = $("#download-form");
   if (form.length) {
@@ -29,17 +28,13 @@ async function getDriveDownloadUrl(fileId) {
     form.find("input[type=hidden]").each((i, el) => {
       params[$(el).attr("name")] = $(el).attr("value");
     });
-
-    // Build full URL with query params
     const query = new URLSearchParams(params).toString();
     return `${action}?${query}`;
   }
-
-  // Normal public file
   return baseUrl;
 }
 
-// Get filename and size
+// Get file info (size & extension)
 async function getFileInfo(url) {
   const res = await axios.head(url, { maxRedirects: 5 });
   const disposition = res.headers["content-disposition"];
@@ -51,10 +46,10 @@ async function getFileInfo(url) {
   return { fileName, ext, size };
 }
 
-// Download file to local
+// Download file to path
 async function downloadFile(url, filePath) {
-  const res = await axios({ url, method: "GET", responseType: "stream", maxRedirects: 5 });
   const writer = fs.createWriteStream(filePath);
+  const res = await axios({ url, method: "GET", responseType: "stream", maxRedirects: 5 });
   res.data.pipe(writer);
   return new Promise((resolve, reject) => {
     writer.on("finish", resolve);
@@ -62,12 +57,23 @@ async function downloadFile(url, filePath) {
   });
 }
 
-// DANUWA-MD Google Drive plugin
+// Zip multiple parts
+async function zipParts(parts, baseName) {
+  const zipPath = `${TEMP_DIR}/${baseName}.zip`;
+  const output = fs.createWriteStream(zipPath);
+  const archive = archiver("zip", { zlib: { level: 9 } });
+  archive.pipe(output);
+  parts.forEach((p) => archive.file(p, { name: path.basename(p) }));
+  await archive.finalize();
+  return zipPath;
+}
+
+// DANUWA-MD Google Drive Plugin
 cmd(
   {
     pattern: "gdrive",
     alias: ["gd"],
-    desc: "Download public Google Drive file (any type/size)",
+    desc: "Download public Google Drive files (stream + split >2GB)",
     category: "download",
     filename: __filename,
   },
@@ -84,30 +90,33 @@ cmd(
       const { fileName, ext, size } = await getFileInfo(downloadUrl);
       const tempFile = path.join(TEMP_DIR, fileName);
 
-      // Download
-      await downloadFile(downloadUrl, tempFile);
-
-      // Split >2GB automatically
+      // If file >2GB, split into equal parts
       const MAX_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
       if (size > MAX_SIZE) {
+        await downloadFile(downloadUrl, tempFile);
         const parts = await splitFile.splitFileBySize(tempFile, MAX_SIZE);
-        for (let i = 0; i < parts.length; i++) {
-          await danuwa.sendMessage(
-            from,
-            {
-              document: { url: parts[i] },
-              fileName: `${fileName}.part${i + 1}${ext}`,
-              mimetype: mime.lookup(ext) || "application/octet-stream",
-            },
-            { quoted: mek }
-          );
-          fs.unlinkSync(parts[i]);
-        }
-      } else {
+        const zippedPath = await zipParts(parts, path.parse(fileName).name);
+
         await danuwa.sendMessage(
           from,
           {
-            document: { url: tempFile },
+            document: { url: zippedPath },
+            fileName: path.basename(zippedPath),
+            mimetype: "application/zip",
+          },
+          { quoted: mek }
+        );
+
+        // Clean up
+        fs.unlinkSync(tempFile);
+        fs.unlinkSync(zippedPath);
+        parts.forEach((p) => fs.existsSync(p) && fs.unlinkSync(p));
+      } else {
+        // Stream small files
+        await danuwa.sendMessage(
+          from,
+          {
+            document: { url: downloadUrl },
             fileName,
             mimetype: mime.lookup(ext) || "application/octet-stream",
           },
@@ -115,16 +124,10 @@ cmd(
         );
       }
 
-      // React ✅ to sent message
+      // React ✅
       await danuwa.sendMessage(from, {
-        react: {
-          text: "✅",
-          key: mek.key,
-        },
+        react: { text: "✅", key: mek.key },
       });
-
-      // Cleanup
-      if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
     } catch (e) {
       console.log("GDRIVE ERROR:", e);
       reply("❌ Error downloading Google Drive file. Make sure the link is public.");
