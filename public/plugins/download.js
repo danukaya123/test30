@@ -1,5 +1,5 @@
 const { cmd } = require("../command");
-const { ytmp3, ytmp4, tiktok, instagram, twitter } = require("sadaslk-dlcore");
+const { ytmp3, ytmp4, tiktok } = require("sadaslk-dlcore");
 const yts = require("yt-search");
 
 async function getYoutube(query) {
@@ -18,6 +18,7 @@ async function getYoutube(query) {
 cmd(
   {
     pattern: "ytmp3",
+    react: "🎼 ",
     alias: ["yta", "song"],
     desc: "Download YouTube MP3 by name or link",
     category: "download",
@@ -81,6 +82,7 @@ cmd(
 cmd(
   {
     pattern: "ytmp4",
+    react: "🎬",
     alias: ["ytv", "video"],
     desc: "Download YouTube MP4 by name or link",
     category: "download",
@@ -167,16 +169,14 @@ cmd(
       const caption = `
            🌟 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 🌟    
 ══════════════════════     
-🔮 Ｄ Ａ Ｎ Ｕ Ｗ Ａ－Ｍ Ｄ 🔮  
-🎬 *_TIKTOK_* 𝘿𝙊𝙒𝙉𝙇𝙊𝘼𝘿𝙀𝙍 🎬  
+🔮  Ｄ  Ａ  Ｎ  Ｕ  Ｗ  Ａ  －  Ｍ  Ｄ  🔮  
+  🎬 *_TIKTOK_* 𝘿𝙊𝙒𝙉𝙇𝙊𝘼𝘿𝙀𝙍 🎬  
 ══════════════════════  
 
 ❤️ Download your Tiktok video ❤️
 🚀 Pow. By *DANUKA DISANAYAKA* 🔥
 ──────────────────────
 🎵 *${data.title || "TikTok Video"}*
-
-👤 Author: ${data.author || "Unknown"}
 ⏱ Duration: ${data.runtime}s
 `;
 
@@ -192,104 +192,6 @@ cmd(
     } catch (e) {
       console.log("TIKTOK ERROR:", e);
       reply("❌ Error while downloading TikTok video");
-    }
-  }
-);
-
-/* ===================== INSTAGRAM ===================== */
-cmd(
-  {
-    pattern: "instagram",
-    alias: ["ig"],
-    desc: "Download Instagram video",
-    category: "download",
-    filename: __filename,
-  },
-  async (danuwa, mek, m, { from, q, reply }) => {
-    try {
-      if (!q) return reply("📸 Send Instagram link");
-
-      reply("*පොඩ්ඩක් ඉදහම් සනික එවන්නම් ❤️‍🩹👀*");
-
-      const data = await instagram(q);
-      if (!data?.url) return reply("❌ Failed to download Instagram video");
-
-      const caption = `
-           🌟 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 🌟    
-══════════════════════     
-🔮 Ｄ Ａ Ｎ Ｕ Ｗ Ａ－Ｍ Ｄ 🔮
-📸 *_INSTA_* 𝘿𝙊𝙒𝙉𝙇𝙊𝘼𝘿𝙀𝙍 📸
-══════════════════════
-
-✨ Enjoy your Instagram video ✨
-🚀 Pow. By *DANUKA DISANAYAKA* 🔥
-──────────────────────
-📸 *Instagram Video*
-──────────────────────
-📸 Made with ❤️ by *DANUKA DISANAYAKA💫*
-`;
-
-      const sent = await danuwa.sendMessage(
-        from,
-        { video: { url: data.url }, caption },
-        { quoted: mek }
-      );
-
-      await danuwa.sendMessage(from, {
-        react: { text: "✅", key: sent.key },
-      });
-    } catch (e) {
-      console.log("INSTAGRAM ERROR:", e);
-      reply("❌ Error while downloading Instagram video");
-    }
-  }
-);
-
-/* ===================== TWITTER ===================== */
-cmd(
-  {
-    pattern: "twitter",
-    alias: ["tw", "x"],
-    desc: "Download Twitter/X video",
-    category: "download",
-    filename: __filename,
-  },
-  async (danuwa, mek, m, { from, q, reply }) => {
-    try {
-      if (!q) return reply("🐦 Send Twitter/X link");
-
-      reply("*පොඩ්ඩක් ඉදහම් සනික එවන්නම් ❤️‍🩹👀*");
-
-      const data = await twitter(q);
-      if (!data?.url) return reply("❌ Failed to download Twitter video");
-
-      const caption = `
-           🌟 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 🌟    
-══════════════════════     
-🔮 Ｄ Ａ Ｎ Ｕ Ｗ Ａ－Ｍ Ｄ 🔮
-🐦 *_TWITTER_* 𝘿𝙊𝙒𝙉𝙇𝙊𝘼𝘿𝙀𝙍 🐦
-══════════════════════
-
-🔥 Your Twitter video is ready 🔥
-🚀 Pow. By *DANUKA DISANAYAKA* 🔥
-──────────────────────
-🐦 *Twitter Video*
-──────────────────────
-🐦 Made with ❤️ by *DANUKA DISANAYAKA💫*
-`;
-
-      const sent = await danuwa.sendMessage(
-        from,
-        { video: { url: data.url }, caption },
-        { quoted: mek }
-      );
-
-      await danuwa.sendMessage(from, {
-        react: { text: "✅", key: sent.key },
-      });
-    } catch (e) {
-      console.log("TWITTER ERROR:", e);
-      reply("❌ Error while downloading Twitter video");
     }
   }
 );
