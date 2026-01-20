@@ -45,34 +45,39 @@ async function getFileInfo(url) {
 }
 
 async function downloadFile(url, filePath) {
+  console.log("[DEBUG] Starting download to:", filePath);
   const writer = fs.createWriteStream(filePath);
   const res = await axios({ url, method: "GET", responseType: "stream", maxRedirects: 5 });
   res.data.pipe(writer);
   return new Promise((resolve, reject) => {
-    writer.on("finish", () => resolve());
-    writer.on("error", reject);
+    writer.on("finish", () => {
+      console.log("[DEBUG] Download finished:", filePath);
+      resolve();
+    });
+    writer.on("error", (err) => {
+      console.log("[DEBUG] Download error:", err);
+      reject(err);
+    });
   });
 }
 
-async function zipPart(partPath, zipName) {
-  const zipPath = path.join(TEMP_DIR, zipName);
+async function zipFile(inputPath, outputPath) {
   return new Promise((resolve, reject) => {
-    const output = fs.createWriteStream(zipPath);
-    const archive = archiver("zip", { zlib: { level: 1 } });
-    output.on("close", () => resolve(zipPath));
-    archive.on("error", (err) => reject(err));
+    const output = fs.createWriteStream(outputPath);
+    const archive = archiver("zip", { zlib: { level: 9 } });
     archive.pipe(output);
-    archive.file(partPath, { name: path.basename(partPath) });
+    archive.file(inputPath, { name: path.basename(inputPath) });
     archive.finalize();
+    output.on("close", () => resolve(outputPath));
+    archive.on("error", (err) => reject(err));
   });
 }
 
 cmd(
   {
     pattern: "gdrive",
-    react: "❤️‍🩹",
     alias: ["gd"],
-    desc: "Download public Google Drive files",
+    desc: "Download public Google Drive files (stream + split >1.8GB, 500MB parts)",
     category: "download",
     filename: __filename,
   },
@@ -89,49 +94,47 @@ cmd(
       const { fileName, ext, size } = await getFileInfo(downloadUrl);
 
       const MAX_SIZE = 1.8 * 1024 * 1024 * 1024; // 1.8GB
+      const PART_SIZE = 500 * 1024 * 1024; // 500MB
+
       const tempFile = path.join(TEMP_DIR, fileName);
 
       if (size > MAX_SIZE) {
-        // Warn user
-        await reply("*සුද්දා File size එක වැඩි නිසා Parts වලට කඩල එවන්නම්...ටිකක් ඉන්න ❤️‍🩹👀*");
-
-        // Download full file first
+        reply("*සුද්දා File size එක වැඩි නිසා Parts වලට කඩල එවන්නම්...ටිකක් ඉන්න ❤️‍🩹👀*");
+        console.log("[DEBUG] File >1.8GB, downloading to temp...");
         await downloadFile(downloadUrl, tempFile);
 
-        // Split file into parts
-        const PART_SIZE = 500 * 1024 * 1024;
+        console.log("[DEBUG] Splitting file into 500MB parts...");
         const parts = await splitFile.splitFileBySize(tempFile, PART_SIZE);
+        console.log("[DEBUG] Parts created:", parts);
 
-        // Send all parts in parallel
-        const sendPromises = parts.map(async (part, index) => {
-          const zipName = `${path.parse(fileName).name}-part${index + 1}.zip`;
-          const zipPath = await zipPart(part, zipName);
+        console.log("[DEBUG] Zipping parts in parallel...");
+        const zipPromises = parts.map((part, i) => {
+          const zipPath = path.join(TEMP_DIR, `${path.parse(fileName).name}-part${i + 1}.zip`);
+          return zipFile(part, zipPath);
+        });
+        const zippedParts = await Promise.all(zipPromises);
+        console.log("[DEBUG] All parts zipped:", zippedParts);
 
-          const sent = await danuwa.sendMessage(
+        console.log("[DEBUG] Sending zipped parts sequentially...");
+        for (const zipPath of zippedParts) {
+          await danuwa.sendMessage(
             from,
             {
               document: { url: zipPath },
-              fileName: zipName,
+              fileName: path.basename(zipPath),
               mimetype: "application/zip",
-              caption: `📦 Part ${index + 1} of ${parts.length}`,
             },
             { quoted: mek }
           );
+        }
 
-          // React with ✅ for each part
-          await danuwa.sendMessage(from, {
-            react: { text: "✅", key: sent.key },
-          });
+        console.log("[DEBUG] Cleaning temp files...");
+        fs.unlinkSync(tempFile);
+        zippedParts.forEach((p) => fs.existsSync(p) && fs.unlinkSync(p));
+        parts.forEach((p) => fs.existsSync(p) && fs.unlinkSync(p));
 
-          // Clean up temp files
-          fs.existsSync(part) && fs.unlinkSync(part);
-          fs.existsSync(zipPath) && fs.unlinkSync(zipPath);
-        });
-
-        await Promise.all(sendPromises);
-        fs.existsSync(tempFile) && fs.unlinkSync(tempFile);
       } else {
-        // File <=1.8GB send directly
+        console.log("[DEBUG] File <=1.8GB, sending directly...");
         await danuwa.sendMessage(
           from,
           {
@@ -143,14 +146,14 @@ cmd(
         );
       }
 
-      // React with ✅ after finished
+      console.log("[DEBUG] Reacting with ✅");
       await danuwa.sendMessage(from, {
         react: { text: "✅", key: mek.key },
       });
+
     } catch (e) {
       console.log("GDRIVE ERROR:", e);
       reply("❌ Error downloading Google Drive file. Make sure the link is public.");
     }
   }
 );
-
