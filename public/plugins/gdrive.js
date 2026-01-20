@@ -61,13 +61,13 @@ async function downloadFile(url, filePath) {
   });
 }
 
-async function zipParts(parts, baseName) {
-  const zipPath = `${TEMP_DIR}/${baseName}.zip`;
+async function zipPart(filePath, partName) {
+  const zipPath = path.join(TEMP_DIR, `${partName}.zip`);
   console.log("[DEBUG] Creating zip:", zipPath);
   const output = fs.createWriteStream(zipPath);
   const archive = archiver("zip", { zlib: { level: 9 } });
   archive.pipe(output);
-  parts.forEach((p) => archive.file(p, { name: path.basename(p) }));
+  archive.file(filePath, { name: path.basename(filePath) });
   await archive.finalize();
   console.log("[DEBUG] Zip created:", zipPath);
   return zipPath;
@@ -77,7 +77,7 @@ cmd(
   {
     pattern: "gdrive",
     alias: ["gd"],
-    desc: "Download public Google Drive files (stream + split >2GB)",
+    desc: "Download public Google Drive files (stream + split >1.8GB)",
     category: "download",
     filename: __filename,
   },
@@ -95,40 +95,47 @@ cmd(
 
       const { fileName, ext, size } = await getFileInfo(downloadUrl);
 
-      const MAX_SIZE = 1.8 * 1024 * 1024 * 1024; // 2GB
+      const MAX_SIZE = 1.8 * 1024 * 1024 * 1024; // 1.8GB
       console.log("[DEBUG] File size vs MAX_SIZE:", { size, MAX_SIZE });
 
       const tempFile = path.join(TEMP_DIR, fileName);
 
       if (size > MAX_SIZE) {
-        console.log("[DEBUG] File >2GB, downloading to temp...");
+        console.log("[DEBUG] File >1.8GB, downloading to temp...");
         await downloadFile(downloadUrl, tempFile);
 
         console.log("[DEBUG] Splitting file into parts...");
         const parts = await splitFile.splitFileBySize(tempFile, MAX_SIZE);
         console.log("[DEBUG] Parts created:", parts);
 
-        console.log("[DEBUG] Zipping parts...");
-        const zippedPath = await zipParts(parts, path.parse(fileName).name);
+        for (let i = 0; i < parts.length; i++) {
+          const partZip = await zipPart(parts[i], `${path.parse(fileName).name}-part${i + 1}`);
+          console.log("[DEBUG] Sending part to WhatsApp:", partZip);
 
-        console.log("[DEBUG] Sending zip to WhatsApp...");
-        await danuwa.sendMessage(
-          from,
-          {
-            document: { url: zippedPath },
-            fileName: path.basename(zippedPath),
-            mimetype: "application/zip",
-          },
-          { quoted: mek }
-        );
+          const sent = await danuwa.sendMessage(
+            from,
+            {
+              document: { url: partZip },
+              fileName: path.basename(partZip),
+              mimetype: "application/zip",
+              caption: `📦 ${fileName} — Part ${i + 1} of ${parts.length}`,
+            },
+            { quoted: mek }
+          );
 
-        console.log("[DEBUG] Cleaning temp files...");
-        fs.unlinkSync(tempFile);
-        fs.unlinkSync(zippedPath);
-        parts.forEach((p) => fs.existsSync(p) && fs.unlinkSync(p));
+          await danuwa.sendMessage(from, {
+            react: { text: "✅", key: sent.key },
+          });
+
+          fs.existsSync(partZip) && fs.unlinkSync(partZip);
+          fs.existsSync(parts[i]) && fs.unlinkSync(parts[i]);
+        }
+
+        fs.existsSync(tempFile) && fs.unlinkSync(tempFile);
+
       } else {
-        console.log("[DEBUG] File <=2GB, streaming directly...");
-        await danuwa.sendMessage(
+        console.log("[DEBUG] File <=1.8GB, streaming directly...");
+        const sent = await danuwa.sendMessage(
           from,
           {
             document: { url: downloadUrl },
@@ -137,12 +144,11 @@ cmd(
           },
           { quoted: mek }
         );
-      }
 
-      console.log("[DEBUG] Reacting with ✅");
-      await danuwa.sendMessage(from, {
-        react: { text: "✅", key: mek.key },
-      });
+        await danuwa.sendMessage(from, {
+          react: { text: "✅", key: sent.key },
+        });
+      }
 
     } catch (e) {
       console.log("GDRIVE ERROR:", e);
@@ -150,4 +156,3 @@ cmd(
     }
   }
 );
-
