@@ -95,7 +95,7 @@ cmd(
 
       const { fileName, ext, size } = await getFileInfo(downloadUrl);
 
-      const MAX_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
+      const MAX_SIZE = 1.8 * 1024 * 1024 * 1024; // 2GB
       console.log("[DEBUG] File size vs MAX_SIZE:", { size, MAX_SIZE });
 
       const tempFile = path.join(TEMP_DIR, fileName);
@@ -150,3 +150,4 @@ cmd(
     }
   }
 );
+
