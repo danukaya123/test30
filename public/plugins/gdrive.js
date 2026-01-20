@@ -44,44 +44,22 @@ async function getFileInfo(url) {
   return { fileName, ext, size };
 }
 
-async function downloadFile(url, filePath, from, mek, reply) {
-  console.log("[DEBUG] Starting download to:", filePath);
-  const res = await axios({ url, method: "GET", responseType: "stream", maxRedirects: 5 });
-  const total = parseInt(res.headers["content-length"] || 0);
-  let downloaded = 0;
-
+async function downloadFile(url, filePath) {
   const writer = fs.createWriteStream(filePath);
-  res.data.on("data", (chunk) => {
-    downloaded += chunk.length;
-    const percent = ((downloaded / total) * 100).toFixed(1);
-    reply(`⬇️ Downloading... ${percent}%`);
-  });
-
+  const res = await axios({ url, method: "GET", responseType: "stream", maxRedirects: 5 });
   res.data.pipe(writer);
-
   return new Promise((resolve, reject) => {
-    writer.on("finish", () => {
-      console.log("[DEBUG] Download finished:", filePath);
-      resolve();
-    });
-    writer.on("error", (err) => {
-      console.log("[DEBUG] Download error:", err);
-      reject(err);
-    });
+    writer.on("finish", () => resolve());
+    writer.on("error", reject);
   });
 }
 
-async function zipPart(partPath, zipName, from, mek, index, totalParts, reply) {
+async function zipPart(partPath, zipName) {
   const zipPath = path.join(TEMP_DIR, zipName);
   return new Promise((resolve, reject) => {
     const output = fs.createWriteStream(zipPath);
     const archive = archiver("zip", { zlib: { level: 1 } });
-
-    output.on("close", async () => {
-      await reply(`📦 Part ${index + 1}/${totalParts} ready and sent!`);
-      resolve(zipPath);
-    });
-
+    output.on("close", () => resolve(zipPath));
     archive.on("error", (err) => reject(err));
     archive.pipe(output);
     archive.file(partPath, { name: path.basename(partPath) });
@@ -93,7 +71,7 @@ cmd(
   {
     pattern: "gdrive",
     alias: ["gd"],
-    desc: "Download public Google Drive files (stream + split >1.8GB in parallel) with progress",
+    desc: "Download public Google Drive files (split >1.8GB in parallel)",
     category: "download",
     filename: __filename,
   },
@@ -103,8 +81,6 @@ cmd(
 
       const fileId = extractDriveId(q);
       if (!fileId) return reply("❌ Invalid Google Drive link");
-
-      reply("*පොඩ්ඩක් ඉදහම් සනික එවන්නම් ❤️‍🩹👀*");
 
       const downloadUrl = await getDriveDownloadUrl(fileId);
       console.log("[DEBUG] Download URL:", downloadUrl);
@@ -118,17 +94,17 @@ cmd(
         // Warn user
         await reply("*සුද්දා File size එක වැඩි නිසා Parts වලට කඩල එවන්නම්...ටිකක් ඉන්න ❤️‍🩹👀*");
 
-        // Download with progress
-        await downloadFile(downloadUrl, tempFile, from, mek, reply);
+        // Download full file first
+        await downloadFile(downloadUrl, tempFile);
 
-        console.log("[DEBUG] Splitting file into parts...");
-        const parts = await splitFile.splitFileBySize(tempFile, MAX_SIZE);
-        console.log("[DEBUG] Parts created:", parts);
+        // Split file into parts
+        const PART_SIZE = 500 * 1024 * 1024;
+        const parts = await splitFile.splitFileBySize(tempFile, PART_SIZE);
 
-        // Send parts in parallel with progress updates
+        // Send all parts in parallel
         const sendPromises = parts.map(async (part, index) => {
           const zipName = `${path.parse(fileName).name}-part${index + 1}.zip`;
-          const zipPath = await zipPart(part, zipName, from, mek, index + 1, parts.length, reply);
+          const zipPath = await zipPart(part, zipName);
 
           const sent = await danuwa.sendMessage(
             from,
@@ -141,10 +117,12 @@ cmd(
             { quoted: mek }
           );
 
+          // React with ✅ for each part
           await danuwa.sendMessage(from, {
             react: { text: "✅", key: sent.key },
           });
 
+          // Clean up temp files
           fs.existsSync(part) && fs.unlinkSync(part);
           fs.existsSync(zipPath) && fs.unlinkSync(zipPath);
         });
@@ -152,7 +130,7 @@ cmd(
         await Promise.all(sendPromises);
         fs.existsSync(tempFile) && fs.unlinkSync(tempFile);
       } else {
-        console.log("[DEBUG] File <=1.8GB, streaming directly...");
+        // File <=1.8GB send directly
         await danuwa.sendMessage(
           from,
           {
@@ -164,7 +142,7 @@ cmd(
         );
       }
 
-      console.log("[DEBUG] Reacting with ✅");
+      // React with ✅ after finished
       await danuwa.sendMessage(from, {
         react: { text: "✅", key: mek.key },
       });
