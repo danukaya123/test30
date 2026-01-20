@@ -1,15 +1,12 @@
-
 const { cmd } = require("../command");
 const { ytmp3, ytmp4, tiktok, instagram, twitter } = require("sadaslk-dlcore");
 const yts = require("yt-search");
-
 
 async function getYoutube(query) {
   const isUrl = /(youtube\.com|youtu\.be)/i.test(query);
   if (isUrl) {
     const id = query.split("v=")[1] || query.split("/").pop();
-    const info = await yts({ videoId: id });
-    return info;
+    return await yts({ videoId: id });
   }
 
   const search = await yts(query);
@@ -17,7 +14,7 @@ async function getYoutube(query) {
   return search.videos[0];
 }
 
-
+/* ===================== YTMP3 ===================== */
 cmd(
   {
     pattern: "ytmp3",
@@ -33,7 +30,7 @@ cmd(
       const video = await getYoutube(q);
       if (!video) return reply("❌ No results found");
 
-      const caption =`
+      const caption = `
            🌟 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 🌟    
 ════════════════════════     
 🔮  Ｄ  Ａ  Ｎ  Ｕ  Ｗ  Ａ  －  Ｍ  Ｄ  🔮  
@@ -42,22 +39,20 @@ cmd(
 
 🎼 Let the rhythm guide you... 🎼
 🚀 Pow. By *DANUKA DISANAYAKA* 🔥
-─────────────────────────`
-        `🎵 *${video.title}*\n\n` +
-        `👤 Channel: ${video.author.name}\n` +
-        `⏱ Duration: ${video.timestamp}\n` +
-        `👀 Views: ${video.views.toLocaleString()}\n` +
-        `🔗 ${video.url}
+─────────────────────────
+🎵 *${video.title}*
+
+👤 Channel: ${video.author.name}
+⏱ Duration: ${video.timestamp}
+👀 Views: ${video.views.toLocaleString()}
+🔗 ${video.url}
 ─────────────────────────
 🎼 Made with ❤️ by *DANUKA DISANAYAKA💫*        
 `;
 
       await danuwa.sendMessage(
         from,
-        {
-          image: { url: video.thumbnail },
-          caption,
-        },
+        { image: { url: video.thumbnail }, caption },
         { quoted: mek }
       );
 
@@ -66,19 +61,14 @@ cmd(
       const data = await ytmp3(video.url);
       if (!data?.url) return reply("❌ Failed to download MP3");
 
-      await danuwa.sendMessage(
+      const sent = await danuwa.sendMessage(
         from,
-        {
-          audio: { url: data.url },
-          mimetype: "audio/mpeg",
-        },
+        { audio: { url: data.url }, mimetype: "audio/mpeg" },
         { quoted: mek }
       );
-        await danuwa.sendMessage(from, {
-        react: {
-          text: "✅",
-          key: sent.key,
-        },
+
+      await danuwa.sendMessage(from, {
+        react: { text: "✅", key: sent.key },
       });
     } catch (e) {
       console.log("YTMP3 ERROR:", e);
@@ -87,6 +77,7 @@ cmd(
   }
 );
 
+/* ===================== YTMP4 ===================== */
 cmd(
   {
     pattern: "ytmp4",
@@ -99,7 +90,6 @@ cmd(
     try {
       if (!q) return reply("🎬 Send video name or YouTube link");
 
-      reply("🔎 Searching YouTube...");
       const video = await getYoutube(q);
       if (!video) return reply("❌ No results found");
 
@@ -108,22 +98,21 @@ cmd(
 ════════════════════════     
 🔮  Ｄ  Ａ  Ｎ  Ｕ  Ｗ  Ａ  －  Ｍ  Ｄ  🔮  
       🎬 𝙑𝙄𝘿𝙀𝙊 𝘿𝙊𝙒𝙉𝙇𝙊𝘼𝘿𝙀𝙍 🎬  
-════════════════════════ `  
-`🎬 *${video.title}*\n\n` +
-`👤 Channel: ${video.author.name}\n` +
-`⏱ Duration: ${video.timestamp}\n` +
-`👀 Views: ${video.views.toLocaleString()}\n` +
-`📅 Uploaded: ${video.ago}\n` +
-`🔗 ${video.url}
+════════════════════════   
+🎬 *${video.title}*
+
+👤 Channel: ${video.author.name}
+⏱ Duration: ${video.timestamp}
+👀 Views: ${video.views.toLocaleString()}
+📅 Uploaded: ${video.ago}
+🔗 ${video.url}
 ─────────────────────────
-🎬 Made with ❤️ by *DANUKA DISANAYAKA💫* `;
+🎬 Made with ❤️ by *DANUKA DISANAYAKA💫* 
+`;
 
       await danuwa.sendMessage(
         from,
-        {
-          image: { url: video.thumbnail },
-          caption,
-        },
+        { image: { url: video.thumbnail }, caption },
         { quoted: mek }
       );
 
@@ -136,22 +125,18 @@ cmd(
 
       if (!data?.url) return reply("❌ Failed to download video");
 
-await danuwa.sendMessage(
-  from,
-  {
-    video: { url: data.url },
-    mimetype: "video/mp4",
-    fileName: data.filename || "youtube_video.mp4",
-    caption: "🎬 YouTube video",
-    gifPlayback: false,
-  },
-  { quoted: mek }
-);
-      await danuwa.sendMessage(from, {
-        react: {
-          text: "✅",
-          key: sent.key,
+      const sent = await danuwa.sendMessage(
+        from,
+        {
+          video: { url: data.url },
+          mimetype: "video/mp4",
+          fileName: data.filename || "youtube_video.mp4",
         },
+        { quoted: mek }
+      );
+
+      await danuwa.sendMessage(from, {
+        react: { text: "✅", key: sent.key },
       });
     } catch (e) {
       console.log("YTMP4 ERROR:", e);
@@ -160,7 +145,7 @@ await danuwa.sendMessage(
   }
 );
 
-
+/* ===================== TIKTOK ===================== */
 cmd(
   {
     pattern: "tiktok",
@@ -179,7 +164,7 @@ cmd(
       if (!data?.no_watermark)
         return reply("❌ Failed to download TikTok video");
 
-      const caption =`
+      const caption = `
            🌟 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 🌟    
 ══════════════════════     
 🔮 Ｄ Ａ Ｎ Ｕ Ｗ Ａ－Ｍ Ｄ 🔮  
@@ -188,24 +173,21 @@ cmd(
 
 ❤️ Download your Tiktok video ❤️
 🚀 Pow. By *DANUKA DISANAYAKA* 🔥
-──────────────────────`
-        `🎵 *${data.title || "TikTok Video"}*\n\n` +
-        `👤 Author: ${data.author || "Unknown"}\n` +
-        `⏱ Duration: ${data.runtime}s`;
+──────────────────────
+🎵 *${data.title || "TikTok Video"}*
 
-      await danuwa.sendMessage(
+👤 Author: ${data.author || "Unknown"}
+⏱ Duration: ${data.runtime}s
+`;
+
+      const sent = await danuwa.sendMessage(
         from,
-        {
-          video: { url: data.no_watermark },
-          caption,
-        },
+        { video: { url: data.no_watermark }, caption },
         { quoted: mek }
       );
-            await danuwa.sendMessage(from, {
-        react: {
-          text: "✅",
-          key: sent.key,
-        },
+
+      await danuwa.sendMessage(from, {
+        react: { text: "✅", key: sent.key },
       });
     } catch (e) {
       console.log("TIKTOK ERROR:", e);
@@ -214,6 +196,7 @@ cmd(
   }
 );
 
+/* ===================== INSTAGRAM ===================== */
 cmd(
   {
     pattern: "instagram",
@@ -231,9 +214,9 @@ cmd(
       const data = await instagram(q);
       if (!data?.url) return reply("❌ Failed to download Instagram video");
 
-      const caption =
-`🌟 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 🌟
-══════════════════════
+      const caption = `
+           🌟 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 🌟    
+══════════════════════     
 🔮 Ｄ Ａ Ｎ Ｕ Ｗ Ａ－Ｍ Ｄ 🔮
 📸 *_INSTA_* 𝘿𝙊𝙒𝙉𝙇𝙊𝘼𝘿𝙀𝙍 📸
 ══════════════════════
@@ -243,25 +226,18 @@ cmd(
 ──────────────────────
 📸 *Instagram Video*
 ──────────────────────
-📸 Made with ❤️ by *DANUKA DISANAYAKA💫*`;
+📸 Made with ❤️ by *DANUKA DISANAYAKA💫*
+`;
 
       const sent = await danuwa.sendMessage(
         from,
-        {
-          video: { url: data.url },
-          caption,
-        },
+        { video: { url: data.url }, caption },
         { quoted: mek }
       );
 
-      // ❤️ React emoji to sent video
       await danuwa.sendMessage(from, {
-        react: {
-          text: "✅",
-          key: sent.key,
-        },
+        react: { text: "✅", key: sent.key },
       });
-
     } catch (e) {
       console.log("INSTAGRAM ERROR:", e);
       reply("❌ Error while downloading Instagram video");
@@ -269,6 +245,7 @@ cmd(
   }
 );
 
+/* ===================== TWITTER ===================== */
 cmd(
   {
     pattern: "twitter",
@@ -286,37 +263,30 @@ cmd(
       const data = await twitter(q);
       if (!data?.url) return reply("❌ Failed to download Twitter video");
 
-      const caption =
-`🌟 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 🌟
-══════════════════════
+      const caption = `
+           🌟 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 🌟    
+══════════════════════     
 🔮 Ｄ Ａ Ｎ Ｕ Ｗ Ａ－Ｍ Ｄ 🔮
 🐦 *_TWITTER_* 𝘿𝙊𝙒𝙉𝙇𝙊𝘼𝘿𝙀𝙍 🐦
 ══════════════════════
 
-🔥 Your Twitter/X video is ready 🔥
+🔥 Your Twitter video is ready 🔥
 🚀 Pow. By *DANUKA DISANAYAKA* 🔥
 ──────────────────────
 🐦 *Twitter Video*
 ──────────────────────
-🐦 Made with ❤️ by *DANUKA DISANAYAKA💫*`;
+🐦 Made with ❤️ by *DANUKA DISANAYAKA💫*
+`;
 
       const sent = await danuwa.sendMessage(
         from,
-        {
-          video: { url: data.url },
-          caption,
-        },
+        { video: { url: data.url }, caption },
         { quoted: mek }
       );
 
-      // 🔥 React emoji to sent video
       await danuwa.sendMessage(from, {
-        react: {
-          text: "✅",
-          key: sent.key,
-        },
+        react: { text: "✅", key: sent.key },
       });
-
     } catch (e) {
       console.log("TWITTER ERROR:", e);
       reply("❌ Error while downloading Twitter video");
