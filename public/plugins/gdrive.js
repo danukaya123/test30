@@ -1,35 +1,45 @@
 const { cmd } = require("../command");
+const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
-const axios = require("axios");
 const splitFile = require("split-file");
 const mime = require("mime-types");
+const cheerio = require("cheerio");
 
 const TEMP_DIR = "./temp";
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
 
-// Extract Google Drive file ID
+// Extract file ID from Google Drive URL
 function extractDriveId(url) {
   const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
   return match ? match[1] : null;
 }
 
-// Get real download URL (handle confirm token for unsafe files)
+// Get download URL (handle download anyway form)
 async function getDriveDownloadUrl(fileId) {
   const baseUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-
   const res = await axios.get(baseUrl, { responseType: "text" });
-  const confirmMatch = res.data.match(/name="confirm" value="([0-9A-Za-z_]+)"/);
 
-  if (confirmMatch) {
-    const token = confirmMatch[1];
-    return `https://drive.google.com/uc?export=download&confirm=${token}&id=${fileId}`;
+  // Look for download form
+  const $ = cheerio.load(res.data);
+  const form = $("#download-form");
+  if (form.length) {
+    const action = form.attr("action");
+    const params = {};
+    form.find("input[type=hidden]").each((i, el) => {
+      params[$(el).attr("name")] = $(el).attr("value");
+    });
+
+    // Build full URL with query params
+    const query = new URLSearchParams(params).toString();
+    return `${action}?${query}`;
   }
 
-  return baseUrl; // normal public file
+  // Normal public file
+  return baseUrl;
 }
 
-// Get filename and size from headers
+// Get filename and size
 async function getFileInfo(url) {
   const res = await axios.head(url, { maxRedirects: 5 });
   const disposition = res.headers["content-disposition"];
@@ -41,7 +51,7 @@ async function getFileInfo(url) {
   return { fileName, ext, size };
 }
 
-// Download file
+// Download file to local
 async function downloadFile(url, filePath) {
   const res = await axios({ url, method: "GET", responseType: "stream", maxRedirects: 5 });
   const writer = fs.createWriteStream(filePath);
@@ -52,12 +62,12 @@ async function downloadFile(url, filePath) {
   });
 }
 
-// Main plugin
+// DANUWA-MD Google Drive plugin
 cmd(
   {
     pattern: "gdrive",
     alias: ["gd"],
-    desc: "Download public Google Drive file (even unsafe/executable)",
+    desc: "Download public Google Drive file (any type/size)",
     category: "download",
     filename: __filename,
   },
@@ -74,11 +84,11 @@ cmd(
       const { fileName, ext, size } = await getFileInfo(downloadUrl);
       const tempFile = path.join(TEMP_DIR, fileName);
 
-      // Download file
+      // Download
       await downloadFile(downloadUrl, tempFile);
 
       // Split >2GB automatically
-      const MAX_SIZE = 2 * 1024 * 1024 * 1024;
+      const MAX_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
       if (size > MAX_SIZE) {
         const parts = await splitFile.splitFileBySize(tempFile, MAX_SIZE);
         for (let i = 0; i < parts.length; i++) {
@@ -105,7 +115,7 @@ cmd(
         );
       }
 
-      // React ✅ to the message
+      // React ✅ to sent message
       await danuwa.sendMessage(from, {
         react: {
           text: "✅",
