@@ -70,8 +70,9 @@ async function zipPart(partPath, zipName) {
 cmd(
   {
     pattern: "gdrive",
+    react: "❤️‍🩹",
     alias: ["gd"],
-    desc: "Download public Google Drive files (split >1.8GB in parallel)",
+    desc: "Download public Google Drive files",
     category: "download",
     filename: __filename,
   },
@@ -152,3 +153,4 @@ cmd(
     }
   }
 );
+
