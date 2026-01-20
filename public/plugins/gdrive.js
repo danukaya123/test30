@@ -133,7 +133,10 @@ for (let i = 0; i < zippedParts.length; i++) {
     { quoted: mek }
   );
 }
-
+        
+      await danuwa.sendMessage(from, {
+        text: "ඔන්න ඔක්කම එව්වා ❤️‍🩹👀";
+      });
 
         console.log("[DEBUG] Cleaning temp files...");
         fs.unlinkSync(tempFile);
@@ -164,4 +167,5 @@ for (let i = 0; i < zippedParts.length; i++) {
     }
   }
 );
+
 
