@@ -6,33 +6,45 @@ const splitFile = require("split-file");
 const mime = require("mime-types");
 
 const TEMP_DIR = "./temp";
-
-// Helper: Ensure temp folder exists
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
 
-// Helper: Convert Google Drive public link to direct download URL
-function getDriveDirectUrl(url) {
-  const fileIdMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  if (!fileIdMatch) return null;
-  const fileId = fileIdMatch[1];
-  return `https://drive.google.com/uc?export=download&id=${fileId}`;
+// Extract Google Drive file ID
+function extractDriveId(url) {
+  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
 }
 
-// Helper: Get filename and extension from headers
+// Get real download URL (handle confirm token for unsafe files)
+async function getDriveDownloadUrl(fileId) {
+  const baseUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+
+  const res = await axios.get(baseUrl, { responseType: "text" });
+  const confirmMatch = res.data.match(/name="confirm" value="([0-9A-Za-z_]+)"/);
+
+  if (confirmMatch) {
+    const token = confirmMatch[1];
+    return `https://drive.google.com/uc?export=download&confirm=${token}&id=${fileId}`;
+  }
+
+  return baseUrl; // normal public file
+}
+
+// Get filename and size from headers
 async function getFileInfo(url) {
   const res = await axios.head(url, { maxRedirects: 5 });
   const disposition = res.headers["content-disposition"];
-  let fileName = disposition
+  const fileName = disposition
     ? disposition.split("filename=")[1].replace(/"/g, "")
     : `file-${Date.now()}`;
   const ext = path.extname(fileName) || "." + mime.extension(res.headers["content-type"]);
-  return { fileName, ext, size: parseInt(res.headers["content-length"] || 0) };
+  const size = parseInt(res.headers["content-length"] || 0);
+  return { fileName, ext, size };
 }
 
-// Helper: Download file
+// Download file
 async function downloadFile(url, filePath) {
+  const res = await axios({ url, method: "GET", responseType: "stream", maxRedirects: 5 });
   const writer = fs.createWriteStream(filePath);
-  const res = await axios({ url, method: "GET", responseType: "stream" });
   res.data.pipe(writer);
   return new Promise((resolve, reject) => {
     writer.on("finish", resolve);
@@ -45,7 +57,7 @@ cmd(
   {
     pattern: "gdrive",
     alias: ["gd"],
-    desc: "Download public Google Drive file",
+    desc: "Download public Google Drive file (even unsafe/executable)",
     category: "download",
     filename: __filename,
   },
@@ -53,19 +65,20 @@ cmd(
     try {
       if (!q) return reply("📎 Send a public Google Drive link");
 
-      const directUrl = getDriveDirectUrl(q);
-      if (!directUrl) return reply("❌ Invalid Google Drive link");
+      const fileId = extractDriveId(q);
+      if (!fileId) return reply("❌ Invalid Google Drive link");
 
       reply("*පොඩ්ඩක් ඉදහම් සනික එවන්නම් ❤️‍🩹👀*");
 
-      const { fileName, ext, size } = await getFileInfo(directUrl);
+      const downloadUrl = await getDriveDownloadUrl(fileId);
+      const { fileName, ext, size } = await getFileInfo(downloadUrl);
       const tempFile = path.join(TEMP_DIR, fileName);
 
       // Download file
-      await downloadFile(directUrl, tempFile);
+      await downloadFile(downloadUrl, tempFile);
 
-      // If file >2GB, split
-      const MAX_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
+      // Split >2GB automatically
+      const MAX_SIZE = 2 * 1024 * 1024 * 1024;
       if (size > MAX_SIZE) {
         const parts = await splitFile.splitFileBySize(tempFile, MAX_SIZE);
         for (let i = 0; i < parts.length; i++) {
@@ -78,7 +91,7 @@ cmd(
             },
             { quoted: mek }
           );
-          fs.unlinkSync(parts[i]); // remove part after sending
+          fs.unlinkSync(parts[i]);
         }
       } else {
         await danuwa.sendMessage(
