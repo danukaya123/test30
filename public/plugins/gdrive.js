@@ -116,17 +116,24 @@ cmd(
         console.log("[DEBUG] All parts zipped:", zippedParts);
 
         console.log("[DEBUG] Sending zipped parts sequentially...");
-        for (const zipPath of zippedParts) {
-          await danuwa.sendMessage(
-            from,
-            {
-              document: { url: zipPath },
-              fileName: path.basename(zipPath),
-              mimetype: "application/zip",
-            },
-            { quoted: mek }
-          );
-        }
+for (let i = 0; i < zippedParts.length; i++) {
+  const zipPath = zippedParts[i];
+  const partNumber = i + 1;
+  const totalParts = zippedParts.length;
+  const caption = `📦 ${path.basename(zipPath, ".zip")} - Part ${partNumber}/${totalParts}`;
+
+  await danuwa.sendMessage(
+    from,
+    {
+      document: { url: zipPath },
+      fileName: path.basename(zipPath),
+      mimetype: "application/zip",
+      caption, // add the caption here
+    },
+    { quoted: mek }
+  );
+}
+
 
         console.log("[DEBUG] Cleaning temp files...");
         fs.unlinkSync(tempFile);
@@ -157,3 +164,4 @@ cmd(
     }
   }
 );
+
