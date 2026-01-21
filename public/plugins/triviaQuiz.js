@@ -230,7 +230,7 @@ ${question.options.join("\n")}
 `;
 
   // 🔘 BUTTON MODE
-  if (config.buttons === true) {
+  if (config.BUTTON === true) {
     const buttons = question.options.map((opt, i) => ({
       id: `.trivia_ans_${i + 1}`,
       text: opt.replace(/^\d+\.\s*/, "")
@@ -420,3 +420,4 @@ cmd(
     }
   }
 );
+
