@@ -22,7 +22,7 @@ cmd(
 
       let aiReply = "";
       let attempts = 0;
-      const maxAttempts = 10; // max 10 tries
+      const maxAttempts = 10;
       const wait = (ms) => new Promise((res) => setTimeout(res, ms));
 
       while (!aiReply && attempts < maxAttempts) {
@@ -36,23 +36,21 @@ cmd(
             chat_counter: 0,
             chatbot: [],
           },
-          "/predict"
+          { api_name: "/predict" } // ✅ FIXED
         );
 
-        // result is a tuple [chatbotArray, number, status, textbox]
+        // result = [chatbotArray, number, status, textbox]
         const chatbotArray = result[0];
 
         if (Array.isArray(chatbotArray) && chatbotArray.length > 0) {
           const lastPair = chatbotArray[chatbotArray.length - 1];
           if (Array.isArray(lastPair)) {
-            // AI reply is the string that is not equal to user input
             aiReply = lastPair.find((v) => typeof v === "string" && v.trim() !== q)?.trim() || "";
           }
         }
 
         if (!aiReply) {
-          // if still empty, wait 1 second and retry
-          await wait(1000);
+          await wait(1000); // wait 1s and retry
         }
       }
 
