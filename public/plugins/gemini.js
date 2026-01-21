@@ -3,50 +3,54 @@ const { Client } = require("@gradio/client");
 
 const HF_SPACE = "yuntian-deng/ChatGPT";
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 cmd(
   {
     pattern: "gemini",
     react: "🤖",
-    desc: "Ask AI anything using HuggingFace ChatGPT Space",
+    desc: "Ask AI anything",
     category: "ai",
     filename: __filename,
   },
   async (danuwa, mek, m, { from, q, reply }) => {
     try {
-      if (!q) return reply("📎 Send a question after `.gemini` command");
+      if (!q) return reply("📎 Send a question after `.gemini`");
 
       await reply("🤖 AI is thinking, please wait...");
 
-      // Connect to HF Space
       const client = await Client.connect(HF_SPACE);
 
-      // ✅ CORRECT predict call for JS
-      const result = await client.predict("/predict", [
-        q,     // inputs
-        1,     // top_p
-        1,     // temperature
-        0,     // chat_counter
-        []     // chatbot
-      ]);
-
-      /*
-        result structure:
-        result[0] => chatbot array
-        result[1] => counter
-        result[2] => status
-        result[3] => input textbox
-      */
-
+      let chatbot = [];
+      let counter = 0;
       let aiReply = "";
 
-      if (Array.isArray(result[0]) && result[0].length > 0) {
-        const last = result[0][result[0].length - 1];
-        if (Array.isArray(last) && typeof last[1] === "string") {
-          aiReply = last[1];
+      // 🔁 Polling loop (max ~10 seconds)
+      for (let i = 0; i < 5; i++) {
+        const result = await client.predict("/predict", [
+          q,
+          1,
+          1,
+          counter,
+          chatbot,
+        ]);
+
+        chatbot = result[0];
+        counter = result[1];
+
+        if (Array.isArray(chatbot) && chatbot.length > 0) {
+          const last = chatbot[chatbot.length - 1];
+          if (Array.isArray(last) && typeof last[1] === "string") {
+            aiReply = last[1];
+            break;
+          }
         }
+
+        await sleep(2000); // wait 2 sec before retry
       }
 
-      if (!aiReply) aiReply = "🤖 AI did not return a response.";
+      if (!aiReply)
+        aiReply = "🤖 AI is still generating. Please try again.";
 
       await danuwa.sendMessage(
         from,
@@ -56,7 +60,7 @@ cmd(
 
     } catch (err) {
       console.error("HF AI error:", err);
-      reply("❌ AI error occurred. Try again later.");
+      reply("❌ AI error occurred.");
     }
   }
 );
