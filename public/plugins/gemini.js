@@ -81,21 +81,20 @@ const chatbotHistory = result.data[0];
 const newCounter = result.data[1];
 const aiReply = result.data[3];
 
-// update memory
-sessions[uid].chatbot = chatbotHistory?.slice(-MAX_HISTORY) || [];
-sessions[uid].counter = newCounter;
+// update memory safely
+sessions[uid].chatbot = Array.isArray(chatbotHistory)
+    ? chatbotHistory.slice(-MAX_HISTORY)
+    : [];
+sessions[uid].counter = typeof newCounter === "number" ? newCounter : 0;
 
-// normalize reply
-let aiText = "";
-if (typeof aiReply === "string") aiText = aiReply;
-else if (Array.isArray(aiReply)) aiText = aiReply.join(" ");
-else if (aiReply && typeof aiReply === "object") aiText = JSON.stringify(aiReply);
-
-if (!aiText.trim()) {
-    return reply("⚠️ AI returned empty response.");
+// 🚨 STRICT STRING CHECK
+if (typeof aiReply !== "string" || !aiReply.trim()) {
+    return reply("🤖 AI is thinking… try again.");
 }
 
-await reply(aiText);
+// ✅ SEND TEXT ONLY
+await reply(aiReply.trim());
+
 
 
     } catch (err) {
