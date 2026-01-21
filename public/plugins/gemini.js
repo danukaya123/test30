@@ -20,37 +20,23 @@ cmd(
 
       const client = await Client.connect(HF_SPACE);
 
+      const result = await client.predict({
+        api_name: "/predict",    // ✅ must be inside object
+        inputs: q,
+        top_p: 1,
+        temperature: 1,
+        chat_counter: 0,
+        chatbot: [],
+      });
+
+      // result[0] is chatbot array
+      const chatbotArray = result[0];
       let aiReply = "";
-      let attempts = 0;
-      const maxAttempts = 10;
-      const wait = (ms) => new Promise((res) => setTimeout(res, ms));
 
-      while (!aiReply && attempts < maxAttempts) {
-        attempts++;
-
-        const result = await client.predict(
-          {
-            inputs: q,
-            top_p: 1,
-            temperature: 1,
-            chat_counter: 0,
-            chatbot: [],
-          },
-          { api_name: "/predict" } // ✅ FIXED
-        );
-
-        // result = [chatbotArray, number, status, textbox]
-        const chatbotArray = result[0];
-
-        if (Array.isArray(chatbotArray) && chatbotArray.length > 0) {
-          const lastPair = chatbotArray[chatbotArray.length - 1];
-          if (Array.isArray(lastPair)) {
-            aiReply = lastPair.find((v) => typeof v === "string" && v.trim() !== q)?.trim() || "";
-          }
-        }
-
-        if (!aiReply) {
-          await wait(1000); // wait 1s and retry
+      if (Array.isArray(chatbotArray) && chatbotArray.length > 0) {
+        const lastPair = chatbotArray[chatbotArray.length - 1];
+        if (Array.isArray(lastPair)) {
+          aiReply = lastPair.find((v) => typeof v === "string" && v.trim() !== q)?.trim() || "";
         }
       }
 
