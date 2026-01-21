@@ -162,9 +162,6 @@
     "name": "search.js"
   },
   {
-    "name": "song.js"
-  },
-  {
     "name": "Sticker.js"
   },
   {
@@ -202,9 +199,6 @@
   },
   {
     "name": "url shortner.js"
-  },
-  {
-    "name": "video.js"
   },
   {
     "name": "voice.js"
