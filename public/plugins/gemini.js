@@ -85,11 +85,18 @@ const aiReply = result.data[3];
 sessions[uid].chatbot = chatbotHistory?.slice(-MAX_HISTORY) || [];
 sessions[uid].counter = newCounter;
 
-if (!aiReply || !aiReply.trim()) {
+// normalize reply
+let aiText = "";
+if (typeof aiReply === "string") aiText = aiReply;
+else if (Array.isArray(aiReply)) aiText = aiReply.join(" ");
+else if (aiReply && typeof aiReply === "object") aiText = JSON.stringify(aiReply);
+
+if (!aiText.trim()) {
     return reply("⚠️ AI returned empty response.");
 }
 
-await reply(aiReply);
+await reply(aiText);
+
 
     } catch (err) {
         console.error("HF AI error:", err);
