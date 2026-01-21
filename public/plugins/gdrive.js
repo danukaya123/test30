@@ -129,7 +129,7 @@ for (let i = 0; i < zippedParts.length; i++) {
       document: { url: zipPath },
       fileName: path.basename(zipPath),
       mimetype: "application/zip",
-      react: "✅",
+      react: { text: "✅", key: mek.key },
       caption, // add the caption here
     },
     { quoted: mek }
@@ -158,17 +158,13 @@ for (let i = 0; i < zippedParts.length; i++) {
         );
       }
 
-      console.log("[DEBUG] Reacting with ✅");
-      await danuwa.sendMessage(from, {
-        react: { text: "✅", key: mek.key },
-      });
-
     } catch (e) {
       console.log("GDRIVE ERROR:", e);
       reply("❌ Error downloading Google Drive file. Make sure the link is public.");
     }
   }
 );
+
 
 
 
