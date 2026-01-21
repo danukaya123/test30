@@ -9,7 +9,7 @@ const MAX_CONTEXT_MESSAGES = 20;
 
 // ------------------ AI Plugin ------------------
 cmd({
-    pattern: "ai",
+    pattern: "gemini",
     react: "🤖",
     desc: "Chat with AI (Gemini 2.0 Flash) with temporary memory",
     category: "AI",
