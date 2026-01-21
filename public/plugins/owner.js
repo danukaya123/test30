@@ -24,18 +24,16 @@ cmd(
 ⚙️ Made with ❤️ by
 ╰🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥`;
 
+      await danuwa.sendMessage({caption: ownerCaption, image: {url: "https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/Danuka%20Disanayaka.jpg?raw=true"},{ quoted: mek });
+
       await sendButtons(
         danuwa,
         from,
         {
           // ⚠️ REQUIRED by gifted-btns
-          text: "Owner contact options",
+          text: `     *Owner contact options*
+`,
 
-          image: {
-            url: "https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/Danuka%20Disanayaka.jpg?raw=true"
-          },
-
-          caption: ownerCaption,
 
           buttons: [
             {
