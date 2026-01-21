@@ -141,49 +141,72 @@ setInterval(() => {
 
 
 /* ==========================
-   💻 CODE COMMAND
+   💻 CODE GENERATOR COMMAND
 ========================== */
 cmd({
   pattern: "code",
   react: "💻",
-  desc: "AI programming assistant",
+  desc: "Generate code using AI",
   category: "ai",
   filename: __filename
 }, async (danuwa, mek, m, { from, q, sender, reply }) => {
   try {
-    if (!q) return reply("💻 Use `.code <programming question>`");
+    if (!q) {
+      return reply(
+`💻 *Code Generator*
 
-    await reply("💻 Coding...");
+Usage:
+.code <what you want>
 
-    // Get or create Gemini session
+Examples:
+.code whatsapp bot command
+.code nodejs api example
+.code python scraper`
+      );
+    }
+
+    await reply("💻 Generating code...");
+
     let session = geminiSession[sender];
+
+    // create session if not exists
     if (!session) {
       const client = await Client.connect(HF_SPACE);
       await client.predict("/enable_inputs", {});
-      session = { client, chatbot: [], counter: 0, active: true, timestamp: Date.now() };
+      session = {
+        client,
+        chatbot: [],
+        counter: 0,
+        active: true,
+        timestamp: Date.now()
+      };
       geminiSession[sender] = session;
     }
 
-    // Prevent auto-chat interference
+    // disable auto chat
     session.active = false;
     session.timestamp = Date.now();
 
     const prompt = `
-You are a professional software engineer.
-Explain clearly with examples.
-If code is needed, format it properly.
+You are a senior software developer.
 
-Question:
+Generate clean, working code based on the request below.
+Follow best practices.
+Add comments where necessary.
+If needed, include setup instructions.
+
+Request:
 ${q}
 `;
 
     await runGemini(session, prompt, danuwa, from, mek);
 
   } catch (e) {
-    console.error("Code AI error:", e);
-    reply("❌ Code AI error occurred.");
+    console.error("Code generator error:", e);
+    reply("❌ Code generation failed.");
   }
 });
+
 
 
 /* ==========================
