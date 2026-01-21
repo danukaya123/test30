@@ -191,7 +191,6 @@ const triviaQuestions = [
 
 const userScores = {};
 
-
 async function askQuestion(robin, mek, m, from, sender) {
   const { currentQuestionIndex } = userScores[sender];
 
@@ -219,17 +218,7 @@ async function askQuestion(robin, mek, m, from, sender) {
 
   const question = triviaQuestions[currentQuestionIndex];
 
-  const questionText = `
-🎓 𝐓𝐑𝐈𝐕𝐈𝐀 𝐂𝐇𝐀𝐋𝐋𝐄𝐍𝐆𝐄 🎓
-════════════════════════     
-
-📜 *Question:* ${question.question}
-────────────────────────
-🔢 *Answers:*
-${question.options.join("\n")}
-`;
-
-  // 🔘 BUTTON MODE
+  // 🔘 BUTTON MODE (NO ANSWER TEXT)
   if (config.BUTTON === true) {
     const buttons = question.options.map((opt, i) => ({
       id: `.trivia_ans_${i + 1}`,
@@ -240,32 +229,41 @@ ${question.options.join("\n")}
       robin,
       from,
       {
-        text: questionText + "\n🎯 *Tap the correct answer below*",
+        text: `
+🎓 𝐓𝐑𝐈𝐕𝐈𝐀 𝐂𝐇𝐀𝐋𝐋𝐄𝐍𝐆𝐄 🎓
+════════════════════════     
+
+📜 *Question:* ${question.question}
+────────────────────────
+🎯 *Choose the correct answer:*`,
         buttons
       },
       { quoted: mek }
     );
 
   } else {
-    // 📝 TEXT MODE
+    // 📝 TEXT MODE (ORIGINAL – UNCHANGED)
+    const questionText = `
+🎓 𝐓𝐑𝐈𝐕𝐈𝐀 𝐂𝐇𝐀𝐋𝐋𝐄𝐍𝐆𝐄 🎓
+════════════════════════     
+
+📜 *Question:* ${question.question}
+────────────────────────
+🔢 *Answers:*
+${question.options.join("\n")}
+────────────────────────
+🎯 *Reply with the number (1–4)*`;
+
     await robin.sendMessage(
       from,
-      {
-        text: questionText + `
-────────────────────────
-🎯 *Reply with the number (1–4)*`
-      },
+      { text: questionText },
       { quoted: mek }
     );
   }
 }
 
 
-
- // To store users' scores
-
-
-
+/* ───────────── START COMMAND ───────────── */
 
 cmd(
   {
@@ -277,14 +275,39 @@ cmd(
   },
   async (robin, mek, m, { from, sender }) => {
     try {
-      // Ask if the user is ready
-      await robin.sendMessage(
-        from,
-        {
-          image: {
-            url: "https://github.com/DANUWA-MD/DANUWA-MD/blob/main/images/trivia.png?raw=true",
+      userScores[sender] = { awaitingStart: true };
+
+      // 🔘 BUTTON MODE START
+      if (config.BUTTON === true) {
+        await sendButtons(
+          robin,
+          from,
+          {
+            text: `
+           🌟 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 🌟    
+════════════════════════      
+🔮  Ｄ  Ａ  Ｎ  Ｕ  Ｗ  Ａ －  Ｍ  Ｄ  🔮  
+            🧠 𝗧𝗥𝗜𝗩𝗜𝗔 𝗤𝗨𝗜𝗭 🧠
+════════════════════════  
+📋 Total Questions: *30*
+
+👋 Hello! Are you ready to test your knowledge?`,
+            buttons: [
+              { id: ".trivia_start", text: "▶️ Start Trivia Quiz" }
+            ]
           },
-          caption: `
+          { quoted: mek }
+        );
+
+      } else {
+        // 📝 TEXT MODE START (ORIGINAL)
+        await robin.sendMessage(
+          from,
+          {
+            image: {
+              url: "https://github.com/DANUWA-MD/DANUWA-MD/blob/main/images/trivia.png?raw=true",
+            },
+            caption: `
            🌟 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 🌟    
 ════════════════════════      
 🔮  Ｄ  Ａ  Ｎ  Ｕ  Ｗ  Ａ －  Ｍ  Ｄ  🔮  
@@ -295,29 +318,44 @@ cmd(
 👋 Hello! Are you ready to test your knowledge?
 
 🧠 *Reply with "start" to begin the trivia quiz!*`,
-        },
-        { quoted: mek }
-      );
-
-      // Store user in "waiting to start" state
-      userScores[sender] = {
-        awaitingStart: true,
-      };
+          },
+          { quoted: mek }
+        );
+      }
 
     } catch (e) {
       console.error(e);
-      reply("❌ *Error:* " + e.message);
     }
   }
 );
 
 
+/* ───────────── START HANDLERS ───────────── */
 
+// 📝 TEXT START (UNCHANGED)
 cmd(
   {
-    filter: (text, { sender }) => {
-      return userScores[sender]?.awaitingStart && text.trim().toLowerCase() === "start";
-    },
+    filter: (text, { sender }) =>
+      userScores[sender]?.awaitingStart &&
+      text.trim().toLowerCase() === "start",
+  },
+  async (robin, mek, m, { from, sender, reply }) => {
+    userScores[sender] = {
+      score: 0,
+      currentQuestionIndex: 0,
+    };
+
+    await reply("🎮 *Starting your trivia game...*");
+    await askQuestion(robin, mek, m, from, sender);
+  }
+);
+
+// 🔘 BUTTON START
+cmd(
+  {
+    filter: (text, { sender }) =>
+      userScores[sender]?.awaitingStart &&
+      text === ".trivia_start",
   },
   async (robin, mek, m, { from, sender, reply }) => {
     userScores[sender] = {
@@ -331,30 +369,24 @@ cmd(
 );
 
 
-cmd({
-    filter: (text, { sender }) => {
-      return userScores[sender] && /^[1-4]$/.test(text.trim());
-    },
-  },
-  async (robin, mek, m, { from, body, sender, reply }) => {
-    const userAnswer = parseInt(body.trim());
-    const { currentQuestionIndex } = userScores[sender];
-    const question = triviaQuestions[currentQuestionIndex];
-    
-    // Check if the answer is correct
-    const isCorrect = userAnswer === question.answer;
-    
-    // Update score
-    if (isCorrect) {
-      userScores[sender].score += 1;
-    }
-    
-    // Move to the next question
-    userScores[sender].currentQuestionIndex += 1;
+/* ───────────── ANSWER HANDLERS ───────────── */
 
-    // If answer is correct, ask the next question; else, stop the quiz
-    if (isCorrect) {
-      await reply(`
+// 📝 TEXT ANSWERS (UNCHANGED)
+cmd({
+  filter: (text, { sender }) =>
+    userScores[sender] && /^[1-4]$/.test(text.trim()),
+},
+async (robin, mek, m, { from, body, sender, reply }) => {
+  const userAnswer = parseInt(body.trim());
+  const { currentQuestionIndex } = userScores[sender];
+  const question = triviaQuestions[currentQuestionIndex];
+
+  const isCorrect = userAnswer === question.answer;
+  if (isCorrect) userScores[sender].score += 1;
+  userScores[sender].currentQuestionIndex += 1;
+
+  if (isCorrect) {
+    await reply(`
           🧠 𝗧𝗥𝗜𝗩𝗜𝗔 𝗥𝗘𝗦𝗨𝗟𝗧 🧠
 ════════════════════════  
 
@@ -362,9 +394,9 @@ cmd({
 
 🧠 *Well done! Moving to the next question...*
 `);
-      await askQuestion(robin, mek, m, from, sender);
-    } else {
-      await reply(`
+    await askQuestion(robin, mek, m, from, sender);
+  } else {
+    await reply(`
           🧠 𝗧𝗥𝗜𝗩𝗜𝗔 𝗥𝗘𝗦𝗨𝗟𝗧 🧠
 ════════════════════════  
 
@@ -374,19 +406,15 @@ cmd({
 
 🎯 *Your Final Score:* ${userScores[sender].score} / ${triviaQuestions.length}
 `);
-      delete userScores[sender]; // Clear the user's score data after quiz completion
-    }
+    delete userScores[sender];
   }
-);
+});
 
+// 🔘 BUTTON ANSWERS
 cmd(
   {
-    filter: (text, { sender }) => {
-      return (
-        userScores[sender] &&
-        text.startsWith(".trivia_ans_")
-      );
-    },
+    filter: (text, { sender }) =>
+      userScores[sender] && text.startsWith(".trivia_ans_"),
   },
   async (robin, mek, m, { from, body, sender, reply }) => {
     const userAnswer = parseInt(body.split("_").pop());
@@ -394,7 +422,6 @@ cmd(
     const question = triviaQuestions[currentQuestionIndex];
 
     const isCorrect = userAnswer === question.answer;
-
     if (isCorrect) userScores[sender].score += 1;
     userScores[sender].currentQuestionIndex += 1;
 
@@ -405,7 +432,7 @@ cmd(
 
 🎯 *Your Answer:* Option ${userAnswer} - ✅ Correct!
 
-➡️ *Next question loading...*`);
+🧠 *Well done! Moving to the next question...*`);
       await askQuestion(robin, mek, m, from, sender);
     } else {
       await reply(`
@@ -414,10 +441,12 @@ cmd(
 
 🎯 *Your Answer:* Option ${userAnswer} - ❌ Incorrect!
 
-🎯 *Final Score:* ${userScores[sender].score} / ${triviaQuestions.length}
+🎯 *Your Final Score:* ${userScores[sender].score} / ${triviaQuestions.length}
 `);
       delete userScores[sender];
     }
   }
 );
+
+
 
