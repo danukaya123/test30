@@ -21,14 +21,13 @@ cmd({
 
     const app = await Client.connect(HF_SPACE);
 
-    // ❗ Use timeout of 60s to avoid hanging
-    const result = await Promise.race([
-      app.predict("/predict", [imageBlob]),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 60000))
-    ]);
+    const result = await app.predict("/predict", [imageBlob]);
 
-    let tempUrl = result?.data?.[0];
-    if (!tempUrl) return reply("❌ Failed to process image.");
+    // ✅ Extract URL safely
+    let tempUrl;
+    if (typeof result.data[0] === "string") tempUrl = result.data[0];
+    else if (typeof result.data[0] === "object" && result.data[0]?.url) tempUrl = result.data[0].url;
+    else return reply("❌ Failed to get processed image URL.");
 
     // ✅ Handle relative URLs
     if (tempUrl.startsWith("/")) tempUrl = HF_SPACE.replace(/\/$/, "") + tempUrl;
