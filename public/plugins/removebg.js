@@ -1,5 +1,6 @@
 const { cmd } = require("../command");
 const { Client } = require("@gradio/client");
+const fetch = require("node-fetch");
 
 const HF_SPACE = "https://briaai-bria-rmbg-1-4.hf.space/--replicas/bkhbq/";
 
@@ -11,51 +12,26 @@ cmd({
   filename: __filename,
 }, async (danuwa, mek, m, { from, reply }) => {
   try {
-    // ❌ No image
-    if (!mek._mediaBuffer || mek._mediaType !== "imageMessage") {
-      return reply("📸 *Send an image with caption `.removebg`*");
-    }
+    if (!mek._mediaBuffer || mek._mediaType !== "imageMessage")
+      return reply("📸 Send an image with caption `.removebg`");
 
     await reply("🪄 Removing background, please wait...");
 
-    // 🧠 Convert buffer → Blob
-    const imageBlob = new Blob([mek._mediaBuffer], {
-      type: "image/png",
-    });
+    const imageBlob = new Blob([mek._mediaBuffer], { type: "image/png" });
 
-    // 🔗 Connect HF Space
     const app = await Client.connect(HF_SPACE);
-
     const result = await app.predict("/predict", [imageBlob]);
 
-    let output = result?.data?.[0];
-    if (!output) return reply("❌ Failed to process image.");
+    let tempUrl = result?.data?.[0];
+    if (!tempUrl) return reply("❌ Failed to process image.");
 
-    let imageBuffer;
+    // ✅ If the URL is /file=… download it
+    const res = await fetch(tempUrl);
+    const buffer = Buffer.from(await res.arrayBuffer());
 
-    // ✅ Case 1: data URL
-    if (typeof output === "string" && output.startsWith("data:image")) {
-      const base64 = output.split(",")[1];
-      imageBuffer = Buffer.from(base64, "base64");
-    }
-
-    // ✅ Case 2: object with data URL
-    else if (typeof output === "object" && output.url) {
-      const base64 = output.url.split(",")[1];
-      imageBuffer = Buffer.from(base64, "base64");
-    }
-
-    else {
-      return reply("❌ Unsupported output format.");
-    }
-
-    // 📤 Send image (BUFFER – SAFE)
     await danuwa.sendMessage(
       from,
-      {
-        image: imageBuffer,
-        caption: "✨ *Background removed successfully!*",
-      },
+      { image: buffer, caption: "✨ Background removed!" },
       { quoted: mek }
     );
 
