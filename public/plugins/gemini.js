@@ -3,8 +3,8 @@ const { Client } = require("@gradio/client");
 
 const HF_SPACE = "yuntian-deng/ChatGPT";
 
-// 🧠 Conversation memory (per chat)
-const chatMemory = new Map();
+// 🧠 Per-chat session memory
+const sessions = new Map();
 
 cmd(
   {
@@ -18,24 +18,37 @@ cmd(
     try {
       if (!q) return reply("📎 Send a message after `.gemini`");
 
+      // 🧹 Reset command
+      if (q.toLowerCase() === "reset") {
+        sessions.delete(from);
+        return reply("🧹 Conversation memory cleared.");
+      }
+
       await reply("🤖 Thinking...");
 
-      const client = await Client.connect(HF_SPACE);
+      // 🔐 Get or create session
+      let session = sessions.get(from);
 
-      // Required by this Space
-      await client.predict("/enable_inputs", {});
+      if (!session) {
+        const client = await Client.connect(HF_SPACE);
+        await client.predict("/enable_inputs", {});
 
-      // Get previous conversation
-      let memory = chatMemory.get(from) || [];
-      let counter = memory.length;
+        session = {
+          client,
+          chatbot: [],
+          counter: 0,
+        };
 
-      // Call predict with memory
-      const result = await client.predict("/predict", {
+        sessions.set(from, session);
+      }
+
+      // 🧠 Use SAME client + memory
+      const result = await session.client.predict("/predict", {
         inputs: q,
         top_p: 1,
         temperature: 1,
-        chat_counter: counter,
-        chatbot: memory,
+        chat_counter: session.counter,
+        chatbot: session.chatbot,
       });
 
       const data = result.data;
@@ -50,13 +63,15 @@ cmd(
 
       if (!aiReply) aiReply = "🤖 I couldn’t generate a reply.";
 
-      // 🧠 SAVE conversation
-      memory.push([q, aiReply]);
+      // 🧠 Update memory
+      session.chatbot.push([q, aiReply]);
+      session.counter = session.chatbot.length;
 
-      // Limit memory (prevent crash)
-      if (memory.length > 10) memory.shift();
-
-      chatMemory.set(from, memory);
+      // Limit history
+      if (session.chatbot.length > 10) {
+        session.chatbot.shift();
+        session.counter--;
+      }
 
       await danuwa.sendMessage(
         from,
