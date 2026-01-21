@@ -18,22 +18,30 @@ cmd({
     await reply("🪄 Removing background, please wait...");
 
     const imageBlob = new Blob([mek._mediaBuffer], { type: "image/png" });
-
     const app = await Client.connect(HF_SPACE);
 
     const result = await app.predict("/predict", [imageBlob]);
 
-    // ✅ Extract URL safely
-    let tempUrl;
-    if (typeof result.data[0] === "string") tempUrl = result.data[0];
-    else if (typeof result.data[0] === "object" && result.data[0]?.url) tempUrl = result.data[0].url;
-    else return reply("❌ Failed to get processed image URL.");
+    // -----------------------------
+    // 1️⃣ If result is a file URL
+    // -----------------------------
+    let buffer;
 
-    // ✅ Handle relative URLs
-    if (tempUrl.startsWith("/")) tempUrl = HF_SPACE.replace(/\/$/, "") + tempUrl;
+    if (result.data?.[0]?.url) {
+      let tempUrl = result.data[0].url;
+      if (tempUrl.startsWith("/")) tempUrl = HF_SPACE.replace(/\/$/, "") + tempUrl;
+      const res = await fetch(tempUrl);
+      buffer = Buffer.from(await res.arrayBuffer());
+    }
 
-    const res = await fetch(tempUrl);
-    const buffer = Buffer.from(await res.arrayBuffer());
+    // -----------------------------
+    // 2️⃣ If result is base64 data
+    // -----------------------------
+    else if (result.data?.[0]?.data) {
+      buffer = Buffer.from(result.data[0].data, "base64");
+    }
+
+    else return reply("❌ Failed to get processed image.");
 
     await danuwa.sendMessage(
       from,
