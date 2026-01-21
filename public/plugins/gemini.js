@@ -3,41 +3,40 @@ const { Client } = require("@gradio/client");
 
 const HF_SPACE = "yuntian-deng/ChatGPT";
 
+// 🧠 Conversation memory (per chat)
+const chatMemory = new Map();
+
 cmd(
   {
     pattern: "gemini",
     react: "🤖",
-    desc: "Ask AI anything",
+    desc: "Conversational AI chatbot",
     category: "ai",
     filename: __filename,
   },
   async (danuwa, mek, m, { from, q, reply }) => {
     try {
-      if (!q) return reply("📎 Send a question after `.gemini`");
+      if (!q) return reply("📎 Send a message after `.gemini`");
 
-      await reply("🤖 AI is thinking, please wait...");
+      await reply("🤖 Thinking...");
 
       const client = await Client.connect(HF_SPACE);
 
-      // ✅ REQUIRED: enable inputs (UI does this automatically)
+      // Required by this Space
       await client.predict("/enable_inputs", {});
 
-      // ✅ Call predict exactly like docs
+      // Get previous conversation
+      let memory = chatMemory.get(from) || [];
+      let counter = memory.length;
+
+      // Call predict with memory
       const result = await client.predict("/predict", {
         inputs: q,
         top_p: 1,
         temperature: 1,
-        chat_counter: 0,
-        chatbot: [],
+        chat_counter: counter,
+        chatbot: memory,
       });
-
-      /*
-        result.data structure:
-        [0] chatbot
-        [1] counter
-        [2] status string
-        [3] textbox value
-      */
 
       const data = result.data;
       let aiReply = "";
@@ -49,9 +48,15 @@ cmd(
         }
       }
 
-      if (!aiReply) {
-        aiReply = "🤖 AI did not return a response.";
-      }
+      if (!aiReply) aiReply = "🤖 I couldn’t generate a reply.";
+
+      // 🧠 SAVE conversation
+      memory.push([q, aiReply]);
+
+      // Limit memory (prevent crash)
+      if (memory.length > 10) memory.shift();
+
+      chatMemory.set(from, memory);
 
       await danuwa.sendMessage(
         from,
