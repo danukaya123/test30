@@ -1,8 +1,9 @@
 const { cmd } = require("../command");
+const { Client } = require("@gradio/client");
 const fetch = require("node-fetch");
-const FormData = require("form-data");
 
-const CORS_PROXY = "https://removebg-cors.vercel.app/api"; // same as your website
+// Hugging Face Space URL
+const HF_SPACE = "https://briaai-bria-rmbg-1-4.hf.space/--replicas/bkhbq/";
 
 cmd({
   pattern: "removebg",
@@ -12,44 +13,36 @@ cmd({
   filename: __filename,
 }, async (danuwa, mek, m, { from, reply }) => {
   try {
-    // Validate image
     if (!mek._mediaBuffer || mek._mediaType !== "imageMessage")
       return reply("📸 Send an image with caption `.removebg`");
 
     await reply("🪄 Removing background, please wait...");
 
-    // Prepare file upload using FormData
-    const formData = new FormData();
-    formData.append("files", Buffer.from(mek._mediaBuffer), {
-      filename: "image.png",
-      contentType: "image/png",
-    });
+    // Convert the media buffer to a Blob (as required by @gradio/client)
+    const imageBlob = new Blob([mek._mediaBuffer], { type: "image/png" });
 
-    // Call the CORS proxy to process the image
-    const response = await fetch(`${CORS_PROXY}/image-process`, {
-      method: "POST",
-      body: formData,
-    });
+    // Connect to Hugging Face Space
+    const app = await Client.connect(HF_SPACE);
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Server returned ${response.status}: ${text}`);
-    }
+    // Predict / remove background
+    const result = await app.predict("/predict", [imageBlob]);
 
-    const result = await response.json();
+    const processedUrl = result?.data?.[0];
+    if (!processedUrl || typeof processedUrl !== "string") 
+      return reply("❌ Failed to get processed image URL.");
 
-    if (!result.success || !result.data?.[0])
-      return reply("❌ Failed to process image.");
+    // Make sure it's an absolute URL
+    const absoluteUrl = processedUrl.startsWith("http")
+      ? processedUrl
+      : `https://briaai-bria-rmbg-1-4.hf.space${processedUrl}`;
 
-    const processedUrl = result.data[0]; // absolute URL via proxy
+    // Download processed image
+    const res = await fetch(absoluteUrl);
+    if (!res.ok) return reply("❌ Failed to download processed image.");
 
-    // Fetch the processed image
-    const imageRes = await fetch(processedUrl);
-    if (!imageRes.ok) throw new Error("Failed to download processed image");
+    const buffer = Buffer.from(await res.arrayBuffer());
 
-    const buffer = Buffer.from(await imageRes.arrayBuffer());
-
-    // Send the background-removed image
+    // Send processed image to user
     await danuwa.sendMessage(
       from,
       { image: buffer, caption: "✨ Background removed!" },
