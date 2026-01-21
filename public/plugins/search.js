@@ -24,7 +24,7 @@ function cleanDuckLink(link) {
 cmd({
   pattern: "google",
   react: "🔍",
-  desc: "Search the web (no API)",
+  desc: "Search in google",
   category: "search",
   filename: __filename
 }, async (danuwa, mek, m, { from, q, sender, reply }) => {
@@ -51,7 +51,7 @@ cmd({
     if (!results.length) return reply("❌ No results found.");
 
     let text = `
-╭─────── ⭓ ⭓ ⭓ ─────────╮
+╭─────── ⭓ ⭓ ⭓ ──────────╮
 │        🔍 GOOGLE SEARCH 🔍        │
 ╰──────────────⟡───────╯
 │ 🔎 *Query:* ${q}
@@ -108,7 +108,7 @@ cmd({
   const wikiUrl = `https://en.wikipedia.org/wiki/${encodeURIComponent(q.replace(/ /g, "_"))}`;
   const text = `
 ╭─────── ⭓ ⭓ ⭓ ─────────╮
-│        📚 WIKIPEDIA SEARCH 📚       │
+│     📚 WIKIPEDIA SEARCH 📚       │
 ╰──────────────⟡───────╯
 │ 🔎 *Query:* ${q}
 │ 🌐 *Link:* ${wikiUrl}
@@ -132,7 +132,7 @@ cmd({
 cmd({
   pattern: "news",
   react: "📰",
-  desc: "Search News (DuckDuckGo)",
+  desc: "Search News",
   category: "search",
   filename: __filename
 }, async (danuwa, mek, m, { from, q, reply }) => {
@@ -156,8 +156,8 @@ cmd({
     if (!results.length) return reply("❌ No news found.");
 
     let text = `
-╭─────── ⭓ ⭓ ⭓ ─────────╮
-│        📰 NEWS SEARCH 📰       │
+╭─────── ⭓ ⭓ ⭓ ──────────╮
+│            📰 NEWS SEARCH 📰       │
 ╰──────────────⟡───────╯
 │ 🔎 *Query:* ${q}
 │ 📊 *Results:* ${results.length}
@@ -197,12 +197,12 @@ cmd({
 });
 
 /* ==========================
-   🖼️ IMAGE SEARCH (NO API)
+   🖼️ IMAGE SEARCH (UNSPLASH)
 ========================== */
 cmd({
   pattern: "image",
   react: "🖼️",
-  desc: "Search images on the web (no API)",
+  desc: "Search images online",
   category: "search",
   filename: __filename
 }, async (danuwa, mek, m, { from, q, reply }) => {
@@ -211,43 +211,28 @@ cmd({
 
     await reply("🖼️ Searching for images...");
 
-    const url = `https://duckduckgo.com/html/?q=${encodeURIComponent(q)}&iax=images&ia=images`;
+    // Generate 5 random images from Unsplash
+    const imageUrls = [];
+    for (let i = 0; i < 5; i++) {
+      imageUrls.push(`https://source.unsplash.com/600x400/?${encodeURIComponent(q)}&sig=${i}`);
+    }
 
-    const { data } = await axios.get(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
-      }
-    });
-
-    const $ = cheerio.load(data);
-    const results = [];
-
-    $(".tile--img").each((i, el) => {
-      if (i >= 5) return; // top 5 images
-      const img = $(el).find("img").attr("data-src") || $(el).find("img").attr("src");
-      const title = $(el).find("img").attr("alt") || "No description";
-      if (img) results.push({ img, title });
-    });
-
-    if (!results.length) return reply("❌ No images found.");
-
-    // send each image
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i];
+    // Send each image with DANUWA-style caption
+    for (let i = 0; i < imageUrls.length; i++) {
       await danuwa.sendMessage(from, {
-        image: { url: r.img },
+        image: { url: imageUrls[i] },
         caption: `
 ╭─ 🖼️ IMAGE RESULT ${i + 1}
-│ 📝 *Title:* ${r.title}
-│ 🔎 *Query:* ${q}
+│ 📝 *Query:* ${q}
+│ 🌐 *Source:* Unsplash
 ╰───────────────⬣`
       }, { quoted: mek });
     }
 
   } catch (e) {
-    console.error("No-API Image search error:", e);
+    console.error("Image search error:", e);
     reply("❌ Image search failed.");
   }
 });
+
 
