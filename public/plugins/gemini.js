@@ -2,68 +2,102 @@ const { cmd } = require('../command');
 const config = require('../config');
 const axios = require('axios');
 
-// ------------------ In-memory temporary context ------------------
-let userContexts = {}; // { userId: { messages: [...], lastActive: timestamp } }
-const CONTEXT_TIMEOUT = 10 * 60 * 1000; // 10 minutes inactivity
-const MAX_CONTEXT_MESSAGES = 20;
+// ------------------ TEMP MEMORY ------------------
+const userContexts = {};
+const CONTEXT_TIMEOUT = 10 * 60 * 1000; // 10 min
+const MAX_CONTEXT = 20;
 
-// ------------------ AI Plugin ------------------
+// ------------------ SAFE TEXT EXTRACTOR ------------------
+function getText(mek, m) {
+    return (
+        mek.message?.conversation ||
+        mek.message?.extendedTextMessage?.text ||
+        mek.message?.imageMessage?.caption ||
+        mek.message?.videoMessage?.caption ||
+        m.msg?.text ||
+        ''
+    );
+}
+
+// ------------------ AI PLUGIN ------------------
 cmd({
     pattern: "gemini",
     react: "🤖",
-    desc: "Chat with AI (Gemini 2.0 Flash) with temporary memory",
+    desc: "AI chat with memory (Gemini)",
     category: "AI",
     filename: __filename
 }, async (danuwa, mek, m, { reply }) => {
     try {
-        const userId = m.sender;
-        const body = (m.msg?.text || m.msg?.conversation || '').replace(/^\.ai\s*/, '');
-        if (!body) return reply('Send me a question after .ai, e.g., `.ai Hello!`');
+        const rawText = getText(mek, m);
 
+        // remove ".ai" from start
+        const text = rawText.replace(/^\.ai\s*/i, '').trim();
+
+        if (!text) {
+            return reply("❌ Send text like:\n.ai Hello how are you?");
+        }
+
+        const userId = m.sender;
         const now = Date.now();
 
-        // Initialize user context if not exists
-        if (!userContexts[userId]) userContexts[userId] = { messages: [], lastActive: now };
+        // init memory
+        if (!userContexts[userId]) {
+            userContexts[userId] = { messages: [], lastActive: now };
+        }
 
-        // Reset context if inactive for too long
+        // auto-reset after inactivity
         if (now - userContexts[userId].lastActive > CONTEXT_TIMEOUT) {
             userContexts[userId].messages = [];
         }
         userContexts[userId].lastActive = now;
 
-        // Add user message to context
-        userContexts[userId].messages.push({ role: "user", content: body });
+        // push user msg
+        userContexts[userId].messages.push({
+            role: "user",
+            content: text
+        });
 
-        // Limit context to last 20 messages
-        if (userContexts[userId].messages.length > MAX_CONTEXT_MESSAGES) {
+        // limit memory
+        if (userContexts[userId].messages.length > MAX_CONTEXT) {
             userContexts[userId].messages.shift();
         }
 
-        // ------------------ Call Gemini API ------------------
-        const apiKey = config.GEMINI_API_KEY;
-        const response = await axios.post(
-            `https://generativelanguage.googleapis.com/v1beta/chat/completions?key=${apiKey}`,
+        // ------------------ GEMINI REQUEST ------------------
+        const res = await axios.post(
+            `https://generativelanguage.googleapis.com/v1beta/chat/completions?key=${config.GEMINI_API_KEY}`,
             {
                 model: "gemini-2.0-flash",
                 messages: [
-                    { role: "system", content: "You are Quizontal WhatsApp bot AI. Friendly and helpful." },
+                    {
+                        role: "system",
+                        content:
+                            "You are a WhatsApp AI assistant. Think carefully, reason step by step internally, and respond clearly and helpfully."
+                    },
                     ...userContexts[userId].messages
                 ],
-                max_output_tokens: 500
+                generation_config: {
+                    temperature: 0.7,
+                    top_p: 0.9,
+                    max_output_tokens: 600
+                }
             },
-            { headers: { 'Content-Type': 'application/json' } }
+            { headers: { "Content-Type": "application/json" } }
         );
 
-        const aiReply = response.data?.candidates?.[0]?.content?.[0]?.text || "I couldn't understand that.";
+        const aiReply =
+            res.data?.candidates?.[0]?.content?.[0]?.text ||
+            "⚠️ AI failed to respond.";
 
-        // Send AI reply
         await reply(aiReply);
 
-        // Add AI reply to context
-        userContexts[userId].messages.push({ role: "assistant", content: aiReply });
+        // save assistant reply
+        userContexts[userId].messages.push({
+            role: "assistant",
+            content: aiReply
+        });
 
     } catch (err) {
         console.error(err);
-        reply('⚠️ AI is not responding right now.');
+        reply("⚠️ AI error. Try again later.");
     }
 });
