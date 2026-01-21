@@ -3,8 +3,6 @@ const { Client } = require("@gradio/client");
 
 const HF_SPACE = "yuntian-deng/ChatGPT";
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
 cmd(
   {
     pattern: "gemini",
@@ -21,36 +19,39 @@ cmd(
 
       const client = await Client.connect(HF_SPACE);
 
-      let chatbot = [];
-      let counter = 0;
+      // ✅ REQUIRED: enable inputs (UI does this automatically)
+      await client.predict("/enable_inputs", {});
+
+      // ✅ Call predict exactly like docs
+      const result = await client.predict("/predict", {
+        inputs: q,
+        top_p: 1,
+        temperature: 1,
+        chat_counter: 0,
+        chatbot: [],
+      });
+
+      /*
+        result.data structure:
+        [0] chatbot
+        [1] counter
+        [2] status string
+        [3] textbox value
+      */
+
+      const data = result.data;
       let aiReply = "";
 
-      // 🔁 Polling loop (max ~10 seconds)
-      for (let i = 0; i < 5; i++) {
-        const result = await client.predict("/predict", [
-          q,
-          1,
-          1,
-          counter,
-          chatbot,
-        ]);
-
-        chatbot = result[0];
-        counter = result[1];
-
-        if (Array.isArray(chatbot) && chatbot.length > 0) {
-          const last = chatbot[chatbot.length - 1];
-          if (Array.isArray(last) && typeof last[1] === "string") {
-            aiReply = last[1];
-            break;
-          }
+      if (Array.isArray(data[0]) && data[0].length > 0) {
+        const last = data[0][data[0].length - 1];
+        if (Array.isArray(last) && typeof last[1] === "string") {
+          aiReply = last[1];
         }
-
-        await sleep(2000); // wait 2 sec before retry
       }
 
-      if (!aiReply)
-        aiReply = "🤖 AI is still generating. Please try again.";
+      if (!aiReply) {
+        aiReply = "🤖 AI did not return a response.";
+      }
 
       await danuwa.sendMessage(
         from,
