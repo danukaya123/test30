@@ -1,6 +1,5 @@
 const { cmd } = require("../command");
 const { sendButtons } = require("gifted-btns");
-const config = require("../config");
 
 cmd(
   {
@@ -25,52 +24,55 @@ cmd(
 ⚙️ Made with ❤️ by
 ╰🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥`;
 
-      const buttons = [
-        {
-          name: "cta_call",
-          buttonParamsJson: {
-            display_text: "📞 Call on WhatsApp",
-            phone_number: "94776121326"
-          }
-        },
-        {
-          name: "cta_copy",
-          buttonParamsJson: {
-            display_text: "📋 Copy WhatsApp Number",
-            copy_code: "0776121326"
-          }
-        },
-        {
-          name: "cta_url",
-          buttonParamsJson: {
-            display_text: "💻 GitHub Profile",
-            url: "http://github.com/DANUWA-MD"
-          }
-        },
-        {
-          name: "cta_url",
-          buttonParamsJson: {
-            display_text: "▶️ YouTube Channel",
-            url: "http://youtube.com/@quizontal"
-          }
-        }
-      ];
-
       await sendButtons(
         danuwa,
         from,
         {
+          // ⚠️ REQUIRED by gifted-btns
+          text: "Owner contact options",
+
           image: {
             url: "https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/Danuka%20Disanayaka.jpg?raw=true"
           },
+
           caption: ownerCaption,
-          buttons
+
+          buttons: [
+            {
+              name: "cta_call",
+              buttonParamsJson: JSON.stringify({
+                display_text: "📞 Call Owner",
+                phone_number: "94776121326"
+              })
+            },
+            {
+              name: "cta_copy",
+              buttonParamsJson: JSON.stringify({
+                display_text: "📋 Copy WhatsApp Number",
+                copy_code: "0776121326"
+              })
+            },
+            {
+              name: "cta_url",
+              buttonParamsJson: JSON.stringify({
+                display_text: "💻 GitHub Profile",
+                url: "http://github.com/DANUWA-MD"
+              })
+            },
+            {
+              name: "cta_url",
+              buttonParamsJson: JSON.stringify({
+                display_text: "▶️ YouTube Channel",
+                url: "http://youtube.com/@quizontal"
+              })
+            }
+          ]
         },
         { quoted: mek }
       );
 
-    } catch (err) {
-      console.error(err);
+    } catch (e) {
+      console.error("OWNER PLUGIN ERROR:", e);
     }
   }
 );
