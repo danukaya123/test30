@@ -11,12 +11,12 @@ cmd(
   },
   async (danuwa, mek, m, { from }) => {
     try {
-      const ownerCaption = `╭─────── ⭓ ⭓ ⭓ ─────────╮
-│        👤 OWNER INFO 👤        │
-╰──────────────⟡───────╯
+      const ownerCaption = `
+╭──────  ⭓ ⭓ ⭓ ───────╮
+│    👑 BOT OWNER INFO  👑  │
+╰────────⟡───⟡──────╯
 │ 👋 𝗛𝗲𝘆, I’m
 │ 🔥 *Danuka Dissanayake*
-│
 │ 📱 *WhatsApp:* 0776121326
 │ 💻 *GitHub:* DANUWA-MD
 │ ▶️ *YouTube:* Quizontal
@@ -41,7 +41,7 @@ cmd(
         from,
         {
           // ⚠️ REQUIRED by gifted-btns
-          text: `     *Owner contact options*
+          text: `       *OWNER CONTACT OPTIONS*
 `,
 
 
