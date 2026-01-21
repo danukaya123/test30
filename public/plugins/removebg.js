@@ -1,55 +1,49 @@
-// removebg.js
 const { cmd } = require("../command");
-const { client } = require("@gradio/client");
+const { Client } = require("@gradio/client");
 const fetch = require("node-fetch");
 
 const HF_SPACE = "https://briaai-bria-rmbg-1-4.hf.space/--replicas/bkhbq/";
 
-/* ================= COMMAND: REMOVEBG ================= */
 cmd({
   pattern: "removebg",
-  react: "🖼️",
-  desc: "Remove background from an image",
-  category: "utility",
-  filename: __filename
-}, async (danuwa, mek, m, { from, reply, body, isImage }) => {
-
-  if (!m.quoted && !isImage) 
-    return reply("*❌ Please send or reply to an image with the caption .removebg*");
-
+  react: "🪄",
+  desc: "Remove image background",
+  category: "image",
+  filename: __filename,
+}, async (danuwa, mek, m, { from, reply }) => {
   try {
-    // 1️⃣ Get the image buffer
-    const mediaMessage = m.quoted ? m.quoted : m;
-    const buffer = await danuwa.downloadMedia(mediaMessage);
+    if (!mek._mediaBuffer || mek._mediaType !== "imageMessage")
+      return reply("📸 Send an image with caption `.removebg`");
 
-    if (!buffer) return reply("*❌ Failed to read image*");
+    await reply("🪄 Removing background, please wait...");
 
-    reply("*⏳ Processing image... Removing background, please wait!*");
+    const imageBlob = new Blob([mek._mediaBuffer], { type: "image/png" });
 
-    // 2️⃣ Initialize Gradio client
-    const app = await client(HF_SPACE);
+    const app = await Client.connect(HF_SPACE);
 
-    // 3️⃣ Send image buffer to HF Space predict
-    const result = await app.predict("/predict", [buffer]);
+    // ❗ Use timeout of 60s to avoid hanging
+    const result = await Promise.race([
+      app.predict("/predict", [imageBlob]),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 60000))
+    ]);
 
-    let fileUrl = result?.data?.[0];
-    if (!fileUrl) return reply("*❌ Failed to remove background*");
+    let tempUrl = result?.data?.[0];
+    if (!tempUrl) return reply("❌ Failed to process image.");
 
-    // 4️⃣ Handle relative URLs
-    if (fileUrl.startsWith("/")) fileUrl = HF_SPACE.replace(/\/$/, "") + fileUrl;
+    // ✅ Handle relative URLs
+    if (tempUrl.startsWith("/")) tempUrl = HF_SPACE.replace(/\/$/, "") + tempUrl;
 
-    // 5️⃣ Fetch the resulting image
-    const res = await fetch(fileUrl);
-    const outputBuffer = Buffer.from(await res.arrayBuffer());
+    const res = await fetch(tempUrl);
+    const buffer = Buffer.from(await res.arrayBuffer());
 
-    // 6️⃣ Send back to user
-    await danuwa.sendMessage(from, { 
-      image: outputBuffer, 
-      caption: "✨ Background removed!" 
-    }, { quoted: mek });
+    await danuwa.sendMessage(
+      from,
+      { image: buffer, caption: "✨ Background removed!" },
+      { quoted: mek }
+    );
 
-  } catch (error) {
-    console.error("RemoveBG error:", error);
-    reply(`*❌ RemoveBG failed:* ${error.message || error}`);
+  } catch (err) {
+    console.error("RemoveBG error:", err);
+    reply(`❌ Error while removing background: ${err.message}`);
   }
 });
