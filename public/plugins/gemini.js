@@ -77,19 +77,19 @@ cmd({
           ]
         */
 
-        const chatbotHistory = result.data[0];
-        const newCounter = result.data[1];
+const chatbotHistory = result.data[0];
+const newCounter = result.data[1];
+const aiReply = result.data[3];
 
-        const lastReply =
-            chatbotHistory?.length
-                ? chatbotHistory[chatbotHistory.length - 1][1]
-                : "⚠️ No response.";
+// update memory
+sessions[uid].chatbot = chatbotHistory?.slice(-MAX_HISTORY) || [];
+sessions[uid].counter = newCounter;
 
-        // update memory
-        sessions[uid].chatbot = chatbotHistory.slice(-MAX_HISTORY);
-        sessions[uid].counter = newCounter;
+if (!aiReply || !aiReply.trim()) {
+    return reply("⚠️ AI returned empty response.");
+}
 
-        await reply(lastReply);
+await reply(aiReply);
 
     } catch (err) {
         console.error("HF AI error:", err);
