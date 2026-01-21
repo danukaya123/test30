@@ -155,6 +155,7 @@ cmd({
 
     await reply("💻 Coding...");
 
+    // Get or create Gemini session
     let session = geminiSession[sender];
     if (!session) {
       const client = await Client.connect(HF_SPACE);
@@ -163,7 +164,7 @@ cmd({
       geminiSession[sender] = session;
     }
 
-    // disable auto-chat like the others
+    // Prevent auto-chat interference
     session.active = false;
     session.timestamp = Date.now();
 
