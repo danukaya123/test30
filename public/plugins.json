@@ -33,12 +33,6 @@
     "name": "calc.js"
   },
   {
-    "name": "chatgpt.js"
-  },
-  {
-    "name": "code.js"
-  },
-  {
     "name": "collage.js"
   },
   {
@@ -168,9 +162,6 @@
     "name": "search.js"
   },
   {
-    "name": "sentiment.js"
-  },
-  {
     "name": "song.js"
   },
   {
@@ -181,9 +172,6 @@
   },
   {
     "name": "submenu.js"
-  },
-  {
-    "name": "summarize.js"
   },
   {
     "name": "text2img.js"
