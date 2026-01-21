@@ -1,104 +1,69 @@
-const { cmd } = require('../command');
-const config = require('../config');
-const { Client } = require('@gradio/client');
+const { cmd } = require("../command");
+const { Client } = require("@gradio/client");
 
-// ---------------- MEMORY ----------------
+// ================= SESSION MEMORY =================
 const sessions = {};
-const TIMEOUT = 10 * 60 * 1000; // 10 minutes
-const MAX_HISTORY = 15;
+const MAX_HISTORY = 6;
 
-// ---------------- TEXT EXTRACT ----------------
-function getText(mek, m) {
-    return (
-        mek.message?.conversation ||
-        mek.message?.extendedTextMessage?.text ||
-        mek.message?.imageMessage?.caption ||
-        mek.message?.videoMessage?.caption ||
-        ''
-    );
-}
-
-// ---------------- AI PLUGIN ----------------
-cmd({
+// ================= AI COMMAND =================
+cmd(
+  {
     pattern: "gemini",
     react: "🤖",
-    desc: "Free AI Chat (HuggingFace)",
-    category: "AI",
-    filename: __filename
-}, async (danuwa, mek, m, { reply }) => {
+    alias: ["chat", "gpt"],
+    desc: "Chat with AI (memory enabled)",
+    category: "ai",
+    filename: __filename,
+  },
+  async (danuwa, mek, m, { from, q, reply, sender }) => {
     try {
-        const raw = getText(mek, m);
-        const text = raw.replace(/^\.ai\s*/i, '').trim();
+      if (!q) return reply("🤖 Ask me something...\nExample: `.ai hello`");
 
-        if (!text) {
-            return reply("❌ Use:\n.ai hello");
+      const uid = sender || from;
+
+      if (!sessions[uid]) {
+        sessions[uid] = {
+          chatbot: [],
+          counter: 0,
+        };
+      }
+
+      const client = await Client.connect("yuntian-deng/ChatGPT");
+
+      const result = await client.predict("/predict", {
+        inputs: q,
+        top_p: 1,
+        temperature: 0.8,
+        chat_counter: sessions[uid].counter,
+        chatbot: sessions[uid].chatbot,
+      });
+
+      const chatbot = result.data[0];
+      const counter = result.data[1];
+
+      let aiReply = null;
+
+      // ✅ CORRECT EXTRACTION (VERY IMPORTANT)
+      if (Array.isArray(chatbot) && chatbot.length > 0) {
+        const lastPair = chatbot[chatbot.length - 1];
+        if (Array.isArray(lastPair) && typeof lastPair[1] === "string") {
+          aiReply = lastPair[1];
         }
+      }
 
-        const uid = m.sender;
-        const now = Date.now();
+      if (!aiReply) {
+        return reply("🤖 AI is busy, try again.");
+      }
 
-        // init session
-        if (!sessions[uid]) {
-            sessions[uid] = {
-                chatbot: [],
-                counter: 0,
-                last: now
-            };
-        }
+      // Save memory (limit size)
+      sessions[uid].chatbot = chatbot.slice(-MAX_HISTORY);
+      sessions[uid].counter = counter;
 
-        // reset after inactivity
-        if (now - sessions[uid].last > TIMEOUT) {
-            sessions[uid].chatbot = [];
-            sessions[uid].counter = 0;
-        }
-
-        sessions[uid].last = now;
-
-        // connect to HF Space
-        const client = await Client.connect(
-            "yuntian-deng/ChatGPT",
-            config.HF_TOKEN ? { hf_token: config.HF_TOKEN } : {}
-        );
-
-        const result = await client.predict("/predict", {
-            inputs: text,
-            top_p: 0.9,
-            temperature: 0.7,
-            chat_counter: sessions[uid].counter,
-            chatbot: sessions[uid].chatbot
-        });
-
-        /*
-          result.data = [
-            chatbot_history,
-            new_counter,
-            status,
-            textbox_value
-          ]
-        */
-
-const chatbotHistory = result.data[0];
-const newCounter = result.data[1];
-const aiReply = result.data[3];
-
-// update memory safely
-sessions[uid].chatbot = Array.isArray(chatbotHistory)
-    ? chatbotHistory.slice(-MAX_HISTORY)
-    : [];
-sessions[uid].counter = typeof newCounter === "number" ? newCounter : 0;
-
-// 🚨 STRICT STRING CHECK
-if (typeof aiReply !== "string" || !aiReply.trim()) {
-    return reply("🤖 AI is thinking… try again.");
-}
-
-// ✅ SEND TEXT ONLY
-await reply(aiReply.trim());
-
-
+      await reply(aiReply.trim());
 
     } catch (err) {
-        console.error("HF AI error:", err);
-        reply("⚠️ AI is busy. Try again later.");
+      console.log("AI ERROR:", err);
+      reply("❌ AI error occurred. Try again later.");
     }
-});
+  }
+);
