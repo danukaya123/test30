@@ -1,10 +1,19 @@
 /* ==========================
    🔍 GOOGLE SEARCH (NO API)
 ========================== */
-const { cmd } = require("../command");
+const { cmd } = require("../command"); // Make sure this path is correct
 const axios = require("axios");
 const cheerio = require("cheerio");
 
+// Helper to decode DuckDuckGo links
+function cleanDuckLink(link) {
+  try {
+    const url = new URL("https://duckduckgo.com" + link);
+    return decodeURIComponent(url.searchParams.get("uddg"));
+  } catch {
+    return link;
+  }
+}
 
 cmd({
   pattern: "google",
@@ -12,7 +21,7 @@ cmd({
   desc: "Search the web (no API)",
   category: "search",
   filename: __filename
-}, async (danuwa, mek, m, { from, q, reply }) => {
+}, async (danuwa, mek, m, { from, q, sender, reply }) => {
   try {
     if (!q) return reply("🔍 Use `.google <search query>`");
 
@@ -31,11 +40,11 @@ cmd({
     const results = [];
 
     $(".result").each((i, el) => {
-      if (i >= 5) return;
+      if (i >= 5) return; // limit top 5 results
 
-      const title = $(el).find(".result__a").text();
+      const title = $(el).find(".result__a").text().trim();
       const link = $(el).find(".result__a").attr("href");
-      const snippet = $(el).find(".result__snippet").text();
+      const snippet = $(el).find(".result__snippet").text().trim();
 
       if (title && link) {
         results.push({ title, link, snippet });
@@ -46,13 +55,35 @@ cmd({
       return reply("❌ No results found.");
     }
 
-    let text = `🔍 *Search Results*\n\n`;
+    // Professional DANUWA-style output
+    let text = `
+╭─────── ⭓ ⭓ ⭓ ─────────╮
+│        🔍 GOOGLE SEARCH 🔍        │
+╰──────────────⟡───────╯
+│ 🔎 *Query:* ${q}
+│ 📊 *Results:* ${results.length}
+╰───────────────⬣
+`;
 
     results.forEach((r, i) => {
-      text += `*${i + 1}. ${r.title}*\n`;
-      if (r.snippet) text += `${r.snippet}\n`;
-      text += `${r.link}\n\n`;
+      const cleanLink = cleanDuckLink(r.link);
+      const snippet = r.snippet
+        ? r.snippet.substring(0, 120) + "..."
+        : "No description available.";
+
+      text += `
+╭─ 📌 *RESULT ${i + 1}*
+│ 📰 *Title:* ${r.title}
+│ 📝 *Info:* ${snippet}
+│ 🌐 *Link:* ${cleanLink}
+╰───────────────⬣
+`;
     });
+
+    text += `
+⚙️ Powered by ${config.BOT_NAME || "🌀 DANUWA-MD 🌀"}
+🔥 Web Search Engine
+`;
 
     reply(text);
 
