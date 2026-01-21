@@ -2,102 +2,86 @@ const { cmd } = require('../command');
 const config = require('../config');
 const axios = require('axios');
 
-// ------------------ TEMP MEMORY ------------------
+// ---------------- MEMORY ----------------
 const userContexts = {};
-const CONTEXT_TIMEOUT = 10 * 60 * 1000; // 10 min
+const CONTEXT_TIMEOUT = 10 * 60 * 1000;
 const MAX_CONTEXT = 20;
 
-// ------------------ SAFE TEXT EXTRACTOR ------------------
+// ---------------- TEXT EXTRACT ----------------
 function getText(mek, m) {
     return (
         mek.message?.conversation ||
         mek.message?.extendedTextMessage?.text ||
         mek.message?.imageMessage?.caption ||
         mek.message?.videoMessage?.caption ||
-        m.msg?.text ||
         ''
     );
 }
 
-// ------------------ AI PLUGIN ------------------
+// ---------------- AI PLUGIN ----------------
 cmd({
     pattern: "gemini",
     react: "🤖",
-    desc: "AI chat with memory (Gemini)",
+    desc: "Gemini AI Chat",
     category: "AI",
     filename: __filename
 }, async (danuwa, mek, m, { reply }) => {
     try {
-        const rawText = getText(mek, m);
+        const raw = getText(mek, m);
+        const text = raw.replace(/^\.ai\s*/i, '').trim();
 
-        // remove ".ai" from start
-        const text = rawText.replace(/^\.ai\s*/i, '').trim();
+        if (!text) return reply("❌ Use:\n.ai hello");
 
-        if (!text) {
-            return reply("❌ Send text like:\n.ai Hello how are you?");
-        }
-
-        const userId = m.sender;
+        const uid = m.sender;
         const now = Date.now();
 
-        // init memory
-        if (!userContexts[userId]) {
-            userContexts[userId] = { messages: [], lastActive: now };
-        }
+        if (!userContexts[uid])
+            userContexts[uid] = { history: [], last: now };
 
-        // auto-reset after inactivity
-        if (now - userContexts[userId].lastActive > CONTEXT_TIMEOUT) {
-            userContexts[userId].messages = [];
-        }
-        userContexts[userId].lastActive = now;
+        if (now - userContexts[uid].last > CONTEXT_TIMEOUT)
+            userContexts[uid].history = [];
 
-        // push user msg
-        userContexts[userId].messages.push({
-            role: "user",
-            content: text
-        });
+        userContexts[uid].last = now;
 
-        // limit memory
-        if (userContexts[userId].messages.length > MAX_CONTEXT) {
-            userContexts[userId].messages.shift();
-        }
+        userContexts[uid].history.push(text);
+        if (userContexts[uid].history.length > MAX_CONTEXT)
+            userContexts[uid].history.shift();
 
-        // ------------------ GEMINI REQUEST ------------------
+        // build context
+        const prompt = `
+You are a helpful WhatsApp AI assistant.
+Think carefully and respond clearly.
+
+Conversation:
+${userContexts[uid].history.join("\n")}
+        `;
+
         const res = await axios.post(
-            `https://generativelanguage.googleapis.com/v1beta/chat/completions?key=${config.GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${config.GEMINI_API_KEY}`,
             {
-                model: "gemini-2.0-flash",
-                messages: [
+                contents: [
                     {
-                        role: "system",
-                        content:
-                            "You are a WhatsApp AI assistant. Think carefully, reason step by step internally, and respond clearly and helpfully."
-                    },
-                    ...userContexts[userId].messages
+                        role: "user",
+                        parts: [{ text: prompt }]
+                    }
                 ],
-                generation_config: {
+                generationConfig: {
                     temperature: 0.7,
-                    top_p: 0.9,
-                    max_output_tokens: 600
+                    topP: 0.9,
+                    maxOutputTokens: 600
                 }
-            },
-            { headers: { "Content-Type": "application/json" } }
+            }
         );
 
-        const aiReply =
-            res.data?.candidates?.[0]?.content?.[0]?.text ||
-            "⚠️ AI failed to respond.";
+        const ai =
+            res.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+            "⚠️ No response from AI.";
 
-        await reply(aiReply);
+        reply(ai);
+        userContexts[uid].history.push(ai);
 
-        // save assistant reply
-        userContexts[userId].messages.push({
-            role: "assistant",
-            content: aiReply
-        });
-
-    } catch (err) {
-        console.error(err);
-        reply("⚠️ AI error. Try again later.");
+    } catch (e) {
+        console.error("Gemini error:", e.response?.data || e.message);
+        reply("⚠️ Gemini API error.");
     }
 });
