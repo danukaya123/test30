@@ -81,7 +81,7 @@ cmd({
     });
 
     text += `
-⚙️ Powered by ${config.BOT_NAME || "🌀 DANUWA-MD 🌀"}
+⚙️ Powered by 🌀 DANUWA-MD 🌀
 🔥 Web Search Engine
 `;
 
