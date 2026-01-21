@@ -20,7 +20,7 @@ function getText(mek, m) {
 
 // ---------------- AI PLUGIN ----------------
 cmd({
-    pattern: "ai",
+    pattern: "gemini",
     react: "🤖",
     desc: "Free AI Chat (HuggingFace)",
     category: "AI",
