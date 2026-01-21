@@ -144,7 +144,7 @@ setInterval(() => {
    💻 CODE COMMAND
 ========================== */
 cmd({
-  pattern: "code",
+  pattern: "code2",
   react: "💻",
   desc: "AI programming assistant",
   category: "ai",
