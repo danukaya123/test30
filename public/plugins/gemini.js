@@ -156,24 +156,15 @@ cmd({
     await reply("💻 Coding...");
 
     let session = geminiSession[sender];
-
-    // create session if not exists
     if (!session) {
       const client = await Client.connect(HF_SPACE);
       await client.predict("/enable_inputs", {});
-
-      session = {
-        client,
-        chatbot: [],
-        counter: 0,
-        active: true,
-        timestamp: Date.now()
-      };
-
+      session = { client, chatbot: [], counter: 0, active: true, timestamp: Date.now() };
       geminiSession[sender] = session;
     }
 
-    session.active = false; // prevent auto-chat trigger
+    // disable auto-chat like the others
+    session.active = false;
     session.timestamp = Date.now();
 
     const prompt = `
@@ -192,6 +183,7 @@ ${q}
     reply("❌ Code AI error occurred.");
   }
 });
+
 
 /* ==========================
    📝 SUMMARIZE COMMAND
