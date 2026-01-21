@@ -1,11 +1,11 @@
 const { cmd } = require('../command');
 const config = require('../config');
-const axios = require('axios');
+const { Client } = require('@gradio/client');
 
 // ---------------- MEMORY ----------------
-const userContexts = {};
-const CONTEXT_TIMEOUT = 10 * 60 * 1000;
-const MAX_CONTEXT = 20;
+const sessions = {};
+const TIMEOUT = 10 * 60 * 1000; // 10 minutes
+const MAX_HISTORY = 15;
 
 // ---------------- TEXT EXTRACT ----------------
 function getText(mek, m) {
@@ -20,9 +20,9 @@ function getText(mek, m) {
 
 // ---------------- AI PLUGIN ----------------
 cmd({
-    pattern: "gemini",
+    pattern: "ai",
     react: "🤖",
-    desc: "Gemini AI Chat",
+    desc: "Free AI Chat (HuggingFace)",
     category: "AI",
     filename: __filename
 }, async (danuwa, mek, m, { reply }) => {
@@ -30,58 +30,69 @@ cmd({
         const raw = getText(mek, m);
         const text = raw.replace(/^\.ai\s*/i, '').trim();
 
-        if (!text) return reply("❌ Use:\n.ai hello");
+        if (!text) {
+            return reply("❌ Use:\n.ai hello");
+        }
 
         const uid = m.sender;
         const now = Date.now();
 
-        if (!userContexts[uid])
-            userContexts[uid] = { history: [], last: now };
+        // init session
+        if (!sessions[uid]) {
+            sessions[uid] = {
+                chatbot: [],
+                counter: 0,
+                last: now
+            };
+        }
 
-        if (now - userContexts[uid].last > CONTEXT_TIMEOUT)
-            userContexts[uid].history = [];
+        // reset after inactivity
+        if (now - sessions[uid].last > TIMEOUT) {
+            sessions[uid].chatbot = [];
+            sessions[uid].counter = 0;
+        }
 
-        userContexts[uid].last = now;
+        sessions[uid].last = now;
 
-        userContexts[uid].history.push(text);
-        if (userContexts[uid].history.length > MAX_CONTEXT)
-            userContexts[uid].history.shift();
-
-        // build context
-        const prompt = `
-You are a helpful WhatsApp AI assistant.
-Think carefully and respond clearly.
-
-Conversation:
-${userContexts[uid].history.join("\n")}
-        `;
-
-        const res = await axios.post(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${config.GEMINI_API_KEY}`,
-            {
-                contents: [
-                    {
-                        role: "user",
-                        parts: [{ text: prompt }]
-                    }
-                ],
-                generationConfig: {
-                    temperature: 0.7,
-                    topP: 0.9,
-                    maxOutputTokens: 600
-                }
-            }
+        // connect to HF Space
+        const client = await Client.connect(
+            "yuntian-deng/ChatGPT",
+            config.HF_TOKEN ? { hf_token: config.HF_TOKEN } : {}
         );
 
-        const ai =
-            res.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-            "⚠️ No response from AI.";
+        const result = await client.predict("/predict", {
+            inputs: text,
+            top_p: 0.9,
+            temperature: 0.7,
+            chat_counter: sessions[uid].counter,
+            chatbot: sessions[uid].chatbot
+        });
 
-        reply(ai);
-        userContexts[uid].history.push(ai);
+        /*
+          result.data = [
+            chatbot_history,
+            new_counter,
+            status,
+            textbox_value
+          ]
+        */
 
-    } catch (e) {
-        console.error("Gemini error:", e.response?.data || e.message);
-        reply("⚠️ Gemini API error.");
+        const chatbotHistory = result.data[0];
+        const newCounter = result.data[1];
+
+        const lastReply =
+            chatbotHistory?.length
+                ? chatbotHistory[chatbotHistory.length - 1][1]
+                : "⚠️ No response.";
+
+        // update memory
+        sessions[uid].chatbot = chatbotHistory.slice(-MAX_HISTORY);
+        sessions[uid].counter = newCounter;
+
+        await reply(lastReply);
+
+    } catch (err) {
+        console.error("HF AI error:", err);
+        reply("⚠️ AI is busy. Try again later.");
     }
 });
