@@ -3,42 +3,41 @@ const { Client } = require("@gradio/client");
 
 const HF_SPACE = "yuntian-deng/ChatGPT";
 
-// 🧠 Per-chat session memory
+// 🧠 Per-chat Gemini sessions
 const sessions = new Map();
 
-/* ================================
-   🔥 GEMINI COMMAND (START / CONTROL)
-================================ */
+/* ============================
+   🤖 GEMINI COMMAND
+============================ */
 cmd(
   {
     pattern: "gemini",
     react: "🤖",
-    desc: "Conversational AI chatbot",
+    desc: "Conversational Gemini AI",
     category: "ai",
     filename: __filename,
   },
-  async (danuwa, mek, m, { from, q, reply }) => {
+  async (conn, mek, m, { from, q, reply }) => {
     try {
-      if (!q) return reply("📎 Send a message after `.gemini`");
+      if (!q) return reply("📎 Use `.gemini <message>`");
 
-      // 🧹 RESET MEMORY
-      if (q.toLowerCase() === "reset") {
-        sessions.delete(from);
-        return reply("🧹 Conversation memory cleared.");
-      }
-
-      // 🛑 STOP CHAT MODE
+      // 🛑 STOP CHAT
       if (q.toLowerCase() === "stop") {
         const s = sessions.get(from);
         if (s) s.active = false;
         return reply("🛑 Gemini chat stopped.");
       }
 
+      // 🧹 RESET CHAT
+      if (q.toLowerCase() === "reset") {
+        sessions.delete(from);
+        return reply("🧹 Gemini memory cleared.");
+      }
+
       await reply("🤖 Thinking...");
 
       let session = sessions.get(from);
 
-      // 🔐 Create session if not exists
       if (!session) {
         const client = await Client.connect(HF_SPACE);
         await client.predict("/enable_inputs", {});
@@ -52,53 +51,56 @@ cmd(
 
         sessions.set(from, session);
       } else {
-        session.active = true; // 👈 re-enable chat mode
+        session.active = true; // re-enable
       }
 
-      await runGemini(session, q, danuwa, from, mek);
+      await runGemini(session, q, conn, from, mek);
 
-    } catch (err) {
-      console.error("HF AI error:", err);
-      reply("❌ AI error occurred.");
+    } catch (e) {
+      console.error("Gemini command error:", e);
+      reply("❌ Gemini error occurred.");
     }
   }
 );
 
-/* ================================
-   🤖 AUTO CHAT (NO COMMAND NEEDED)
-================================ */
+/* ============================
+   💬 AUTO CHAT HANDLER
+   (NO COMMAND NEEDED)
+============================ */
 cmd(
   {
-    on: "text",
-  },
-  async (danuwa, mek, m, { from, body }) => {
-    try {
+    // THIS is the key part 👇
+    filter: (text, { sender, message }) => {
+      const from = message.key.remoteJid;
       const session = sessions.get(from);
 
-      // ❌ No active Gemini chat
-      if (!session || !session.active) return;
+      if (!session) return false;        // no session
+      if (!session.active) return false; // chat stopped
+      if (!text) return false;
+      if (text.startsWith(".")) return false; // ignore commands
 
-      // ❌ Ignore commands
-      if (body.startsWith(".")) return;
+      return true;
+    },
+  },
+  async (conn, mek, m, { body, from, reply }) => {
+    try {
+      const session = sessions.get(from);
+      if (!session) return;
 
-      await danuwa.sendMessage(
-        from,
-        { text: "🤖 Thinking..." },
-        { quoted: mek }
-      );
+      await reply("🤖 Thinking...");
 
-      await runGemini(session, body, danuwa, from, mek);
+      await runGemini(session, body, conn, from, mek);
 
-    } catch (err) {
-      console.error("Auto Gemini error:", err);
+    } catch (e) {
+      console.error("Gemini auto-chat error:", e);
     }
   }
 );
 
-/* ================================
-   🧠 GEMINI CORE LOGIC (YOUR LOGIC)
-================================ */
-async function runGemini(session, q, danuwa, from, mek) {
+/* ============================
+   🧠 GEMINI CORE (YOUR LOGIC)
+============================ */
+async function runGemini(session, q, conn, from, mek) {
   const result = await session.client.predict("/predict", {
     inputs: q,
     top_p: 1,
@@ -117,19 +119,13 @@ async function runGemini(session, q, danuwa, from, mek) {
     }
   }
 
-  // 🧠 Update memory
   session.chatbot.push([q, aiReply]);
   session.counter = session.chatbot.length;
 
-  // 🧹 Limit history
   if (session.chatbot.length > 10) {
     session.chatbot.shift();
     session.counter--;
   }
 
-  await danuwa.sendMessage(
-    from,
-    { text: aiReply },
-    { quoted: mek }
-  );
+  await conn.sendMessage(from, { text: aiReply }, { quoted: mek });
 }
