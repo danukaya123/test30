@@ -76,6 +76,7 @@ async function zipFile(inputPath, outputPath) {
 cmd(
   {
     pattern: "gdrive",
+    react: "❤️‍🩹",
     alias: ["gd"],
     desc: "Download public Google Drive files (stream + split >1.8GB, 500MB parts)",
     category: "download",
@@ -128,6 +129,7 @@ for (let i = 0; i < zippedParts.length; i++) {
       document: { url: zipPath },
       fileName: path.basename(zipPath),
       mimetype: "application/zip",
+      react: "✅",
       caption, // add the caption here
     },
     { quoted: mek }
@@ -167,6 +169,7 @@ for (let i = 0; i < zippedParts.length; i++) {
     }
   }
 );
+
 
 
 
