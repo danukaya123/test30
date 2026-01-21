@@ -1,8 +1,10 @@
 /* ==========================
    🔍 GOOGLE SEARCH (NO API)
 ========================== */
+const { cmd } = require("../command");
 const axios = require("axios");
 const cheerio = require("cheerio");
+
 
 cmd({
   pattern: "google",
