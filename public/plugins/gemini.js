@@ -3,104 +3,100 @@ const { Client } = require("@gradio/client");
 
 const HF_SPACE = "yuntian-deng/ChatGPT";
 
-// 🧠 Per-chat Gemini sessions
-const sessions = new Map();
+// 🧠 Active Gemini chats (KEYED BY SENDER — IMPORTANT)
+const geminiSession = {};
 
-/* ============================
+/* ==========================
    🤖 GEMINI COMMAND
-============================ */
-cmd(
-  {
-    pattern: "gemini",
-    react: "🤖",
-    desc: "Conversational Gemini AI",
-    category: "ai",
-    filename: __filename,
-  },
-  async (conn, mek, m, { from, q, reply }) => {
-    try {
-      if (!q) return reply("📎 Use `.gemini <message>`");
+========================== */
+cmd({
+  pattern: "gemini",
+  react: "🤖",
+  desc: "Conversational Gemini AI",
+  category: "ai",
+  filename: __filename
+}, async (danuwa, mek, m, { from, q, sender, reply }) => {
+  try {
+    if (!q) return reply("📎 Use `.gemini <message>`");
 
-      // 🛑 STOP CHAT
-      if (q.toLowerCase() === "stop") {
-        const s = sessions.get(from);
-        if (s) s.active = false;
-        return reply("🛑 Gemini chat stopped.");
-      }
+    const text = q.toLowerCase();
 
-      // 🧹 RESET CHAT
-      if (q.toLowerCase() === "reset") {
-        sessions.delete(from);
-        return reply("🧹 Gemini memory cleared.");
-      }
-
-      await reply("🤖 Thinking...");
-
-      let session = sessions.get(from);
-
-      if (!session) {
-        const client = await Client.connect(HF_SPACE);
-        await client.predict("/enable_inputs", {});
-
-        session = {
-          client,
-          chatbot: [],
-          counter: 0,
-          active: true, // 👈 CHAT MODE ON
-        };
-
-        sessions.set(from, session);
-      } else {
-        session.active = true; // re-enable
-      }
-
-      await runGemini(session, q, conn, from, mek);
-
-    } catch (e) {
-      console.error("Gemini command error:", e);
-      reply("❌ Gemini error occurred.");
+    // 🛑 STOP CHAT
+    if (text === "stop") {
+      if (geminiSession[sender]) geminiSession[sender].active = false;
+      return reply("🛑 Gemini chat stopped.");
     }
-  }
-);
 
-/* ============================
+    // 🧹 RESET CHAT
+    if (text === "reset") {
+      delete geminiSession[sender];
+      return reply("🧹 Gemini memory cleared.");
+    }
+
+    await reply("🤖 Thinking...");
+
+    let session = geminiSession[sender];
+
+    // 🔐 Create new session
+    if (!session) {
+      const client = await Client.connect(HF_SPACE);
+      await client.predict("/enable_inputs", {});
+
+      session = {
+        client,
+        chatbot: [],
+        counter: 0,
+        active: true,
+        timestamp: Date.now()
+      };
+
+      geminiSession[sender] = session;
+    } else {
+      session.active = true;
+    }
+
+    await runGemini(session, q, danuwa, from, mek);
+
+  } catch (e) {
+    console.error("Gemini command error:", e);
+    reply("❌ Gemini error occurred.");
+  }
+});
+
+/* ==========================
    💬 AUTO CHAT HANDLER
-   (NO COMMAND NEEDED)
-============================ */
-cmd(
-  {
-    // THIS is the key part 👇
-    filter: (text, { sender, message }) => {
-      const from = message.key.remoteJid;
-      const session = sessions.get(from);
+========================== */
+cmd({
+  filter: (text, { sender }) => {
+    const session = geminiSession[sender];
 
-      if (!session) return false;        // no session
-      if (!session.active) return false; // chat stopped
-      if (!text) return false;
-      if (text.startsWith(".")) return false; // ignore commands
+    if (!session) return false;          // no session
+    if (!session.active) return false;   // stopped
+    if (!text || !text.trim()) return false;
+    if (text.startsWith(".")) return false; // ignore commands
 
-      return true;
-    },
-  },
-  async (conn, mek, m, { body, from, reply }) => {
-    try {
-      const session = sessions.get(from);
-      if (!session) return;
-
-      await reply("🤖 Thinking...");
-
-      await runGemini(session, body, conn, from, mek);
-
-    } catch (e) {
-      console.error("Gemini auto-chat error:", e);
-    }
+    return true;
   }
-);
+}, async (danuwa, mek, m, { body, sender, from, reply }) => {
+  try {
+    const session = geminiSession[sender];
+    if (!session) return;
 
-/* ============================
-   🧠 GEMINI CORE (YOUR LOGIC)
-============================ */
-async function runGemini(session, q, conn, from, mek) {
+    session.timestamp = Date.now();
+
+    await reply("🤖 Thinking...");
+
+    await runGemini(session, body, danuwa, from, mek);
+
+  } catch (e) {
+    console.error("Gemini auto-chat error:", e);
+  }
+});
+
+/* ==========================
+   🧠 GEMINI CORE LOGIC
+========================== */
+async function runGemini(session, q, danuwa, from, mek) {
   const result = await session.client.predict("/predict", {
     inputs: q,
     top_p: 1,
@@ -127,5 +123,18 @@ async function runGemini(session, q, conn, from, mek) {
     session.counter--;
   }
 
-  await conn.sendMessage(from, { text: aiReply }, { quoted: mek });
+  await danuwa.sendMessage(from, { text: aiReply }, { quoted: mek });
 }
+
+/* ==========================
+   🧹 AUTO CLEANUP (OPTIONAL)
+========================== */
+setInterval(() => {
+  const now = Date.now();
+  const timeout = 5 * 60 * 1000; // 5 min
+  for (const s in geminiSession) {
+    if (now - geminiSession[s].timestamp > timeout) {
+      delete geminiSession[s];
+    }
+  }
+}, 60 * 1000);
