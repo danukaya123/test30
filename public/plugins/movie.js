@@ -1,6 +1,7 @@
 const { cmd } = require("../command");
 const { sendButtons, sendInteractiveMessage } = require("gifted-btns");
-const puppeteer = require("puppeteer");
+const axios = require("axios");
+const cheerio = require("cheerio");
 const config = require("../config");
 
 const pendingSearch = {};
@@ -28,104 +29,185 @@ function getDirectPixeldrainUrl(url) {
 // ---------- Movie Search ----------
 async function searchMovies(query) {
   const url = `https://sinhalasub.lk/?s=${encodeURIComponent(query)}&post_type=movies`;
-  const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox"] });
-  const page = await browser.newPage();
-  await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
-
-  const results = await page.$$eval(".display-item .item-box", boxes =>
-    boxes.slice(0, 10).map((box, index) => {
-      const a = box.querySelector("a");
-      const img = box.querySelector(".thumb");
-      const lang = box.querySelector(".item-desc-giha .language")?.textContent || "";
-      const quality = box.querySelector(".item-desc-giha .quality")?.textContent || "";
-      const qty = box.querySelector(".item-desc-giha .qty")?.textContent || "";
-      return {
-        id: index + 1,
-        title: a?.title?.trim() || "",
-        movieUrl: a?.href || "",
-        thumb: img?.src || "",
-        language: lang.trim(),
-        quality: quality.trim(),
-        qty: qty.trim()
-      };
-    }).filter(m => m.title && m.movieUrl)
-  );
-
-  await browser.close();
-  return results;
+  
+  try {
+    const { data } = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    
+    const $ = cheerio.load(data);
+    const results = [];
+    
+    $(".display-item .item-box").slice(0, 10).each((index, box) => {
+      const $box = $(box);
+      const a = $box.find("a");
+      const img = $box.find(".thumb");
+      const lang = $box.find(".item-desc-giha .language").text() || "";
+      const quality = $box.find(".item-desc-giha .quality").text() || "";
+      const qty = $box.find(".item-desc-giha .qty").text() || "";
+      
+      if (a.attr("href") && a.attr("title")) {
+        results.push({
+          id: index + 1,
+          title: a.attr("title").trim(),
+          movieUrl: a.attr("href"),
+          thumb: img.attr("src") || "",
+          language: lang.trim(),
+          quality: quality.trim(),
+          qty: qty.trim()
+        });
+      }
+    });
+    
+    return results;
+  } catch (error) {
+    console.error("Search error:", error.message);
+    return [];
+  }
 }
 
 // ---------- Movie Metadata ----------
 async function getMovieMetadata(url) {
-  const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox"] });
-  const page = await browser.newPage();
-  await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
-
-  const metadata = await page.evaluate(() => {
-    const getText = el => el?.textContent.trim() || "";
-    const getList = selector => Array.from(document.querySelectorAll(selector)).map(el => el.textContent.trim());
-    const title = getText(document.querySelector(".info-details .details-title h3"));
-    let language = "", directors = [], stars = [];
-    document.querySelectorAll(".info-col p").forEach(p => {
-      const strong = p.querySelector("strong");
-      if (!strong) return;
-      const txt = strong.textContent.trim();
-      if (txt.includes("Language:")) language = strong.nextSibling?.textContent?.trim() || "";
-      if (txt.includes("Director:")) directors = Array.from(p.querySelectorAll("a")).map(a => a.textContent.trim());
-      if (txt.includes("Stars:")) stars = Array.from(p.querySelectorAll("a")).map(a => a.textContent.trim());
+  try {
+    const { data } = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
     });
+    
+    const $ = cheerio.load(data);
+    
+    const title = $(".info-details .details-title h3").text().trim();
+    let language = "";
+    const directors = [];
+    const stars = [];
+    
+    $(".info-col p").each((i, p) => {
+      const $p = $(p);
+      const strong = $p.find("strong");
+      if (strong.length) {
+        const txt = strong.text().trim();
+        if (txt.includes("Language:")) {
+          language = $(strong[0].nextSibling).text().trim();
+        }
+        if (txt.includes("Director:")) {
+          $p.find("a").each((j, a) => {
+            directors.push($(a).text().trim());
+          });
+        }
+        if (txt.includes("Stars:")) {
+          $p.find("a").each((j, a) => {
+            stars.push($(a).text().trim());
+          });
+        }
+      }
+    });
+    
+    const duration = $(".data-views[itemprop='duration']").text().trim();
+    const imdb = $(".data-imdb").text().replace("IMDb:", "").trim();
+    
+    const genres = [];
+    $(".details-genre a").each((i, a) => {
+      genres.push($(a).text().trim());
+    });
+    
+    const thumbnail = $(".splash-bg img").attr("src") || "";
+    
     return {
       title,
       language,
-      duration: getText(document.querySelector(".data-views[itemprop='duration']")),
-      imdb: getText(document.querySelector(".data-imdb"))?.replace("IMDb:", "").trim(),
-      genres: getList(".details-genre a"),
+      duration,
+      imdb,
+      genres,
       directors,
       stars,
-      thumbnail: document.querySelector(".splash-bg img")?.src || ""
+      thumbnail
     };
-  });
-
-  await browser.close();
-  return metadata;
+  } catch (error) {
+    console.error("Metadata error:", error.message);
+    return {
+      title: "",
+      language: "",
+      duration: "",
+      imdb: "",
+      genres: [],
+      directors: [],
+      stars: [],
+      thumbnail: ""
+    };
+  }
 }
 
 // ---------- Pixeldrain Links ----------
 async function getPixeldrainLinks(movieUrl) {
-  const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox"] });
-  const page = await browser.newPage();
-  await page.goto(movieUrl, { waitUntil: "networkidle2", timeout: 30000 });
-
-  const rows = await page.$$eval(".link-pixeldrain tbody tr", trs =>
-    trs.map(tr => {
-      const a = tr.querySelector(".link-opt a");
-      const quality = tr.querySelector(".quality")?.textContent.trim() || "";
-      const size = tr.querySelector("td:nth-child(3) span")?.textContent.trim() || "";
-      return { pageLink: a?.href || "", quality, size };
-    })
-  );
-
-  const links = [];
-  for (const l of rows) {
-    try {
-      const sub = await browser.newPage();
-      await sub.goto(l.pageLink, { waitUntil: "networkidle2", timeout: 30000 });
-      await new Promise(r => setTimeout(r, 12000));
-      const finalUrl = await sub.$eval(".wait-done a[href^='https://pixeldrain.com/']", el => el.href).catch(() => null);
-      if (finalUrl) {
-        let sizeMB = 0;
-        const sizeText = l.size.toUpperCase();
-        if (sizeText.includes("GB")) sizeMB = parseFloat(sizeText) * 1024;
-        else if (sizeText.includes("MB")) sizeMB = parseFloat(sizeText);
-        if (sizeMB <= 2048) {
-          links.push({ link: finalUrl, quality: normalizeQuality(l.quality), size: l.size });
-        }
+  try {
+    const { data } = await axios.get(movieUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       }
-      await sub.close();
-    } catch {}
+    });
+    
+    const $ = cheerio.load(data);
+    const rows = [];
+    
+    $(".link-pixeldrain tbody tr").each((i, tr) => {
+      const $tr = $(tr);
+      const a = $tr.find(".link-opt a");
+      const quality = $tr.find(".quality").text().trim() || "";
+      const size = $tr.find("td:nth-child(3) span").text().trim() || "";
+      
+      if (a.attr("href")) {
+        rows.push({
+          pageLink: a.attr("href"),
+          quality,
+          size
+        });
+      }
+    });
+    
+    const links = [];
+    
+    // Process only first 3 links to save time/memory
+    for (const l of rows.slice(0, 3)) {
+      try {
+        // Get the intermediate page
+        const { data: pageData } = await axios.get(l.pageLink, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': movieUrl
+          }
+        });
+        
+        const $$ = cheerio.load(pageData);
+        const finalUrl = $$(".wait-done a[href^='https://pixeldrain.com/']").attr("href");
+        
+        if (finalUrl) {
+          // Calculate size (limit to 1.5GB)
+          let sizeMB = 0;
+          const sizeText = l.size.toUpperCase();
+          if (sizeText.includes("GB")) sizeMB = parseFloat(sizeText) * 1024;
+          else if (sizeText.includes("MB")) sizeMB = parseFloat(sizeText);
+          
+          if (sizeMB <= 1536) { // 1.5GB limit
+            links.push({ 
+              link: finalUrl, 
+              quality: normalizeQuality(l.quality), 
+              size: l.size 
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Link processing error:", error.message);
+      }
+    }
+    
+    return links;
+  } catch (error) {
+    console.error("Pixeldrain links error:", error.message);
+    return [];
   }
-  await browser.close();
-  return links;
 }
 
 /* ================= COMMAND: MOVIE SEARCH ================= */
@@ -177,9 +259,9 @@ cmd({
 ─────────────────────────
 `;
     
-await danuwa.sendMessage(from, {
-  image: { url: imageUrl },
-  }, { quoted: mek });
+    await danuwa.sendMessage(from, {
+      image: { url: imageUrl },
+    }, { quoted: mek });
     
     await sendInteractiveMessage(danuwa, from, {
       text: caption,
@@ -189,8 +271,8 @@ await danuwa.sendMessage(from, {
 
   } else {
     // -------- Plain Text Reply --------
-  const numberEmojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
-  let filmListMessage = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
+    const numberEmojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
+    let filmListMessage = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
 ║     🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁    ║          
 ╚═━━━━━━━◢◤◆◥◣━━━━━━━━═╝  
     📂 𝗠𝗢𝗩𝗜𝗘 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥 📂  
@@ -204,34 +286,32 @@ await danuwa.sendMessage(from, {
 
 ─────────────────────────`;
 
-  searchResults.forEach((movie, index) => {
-    let adjustedIndex = index + 1;
-    let emojiIndex = adjustedIndex
-      .toString()
-      .split("")
-      .map(num => numberEmojis[num])
-      .join("");
+    searchResults.forEach((movie, index) => {
+      let adjustedIndex = index + 1;
+      let emojiIndex = adjustedIndex
+        .toString()
+        .split("")
+        .map(num => numberEmojis[num])
+        .join("");
 
-    filmListMessage += `${emojiIndex} *${movie.title}*\n\n`;
-  });
+      filmListMessage += `${emojiIndex} *${movie.title}*\n\n`;
+    });
 
-  filmListMessage += `*📝 Reply with movie number (1-${searchResults.length})*`;
+    filmListMessage += `*📝 Reply with movie number (1-${searchResults.length})*`;
 
-
-
-await danuwa.sendMessage(from, {
-  image: { url: imageUrl },
-  caption: filmListMessage,
-          contextInfo: {           
+    await danuwa.sendMessage(from, {
+      image: { url: imageUrl },
+      caption: filmListMessage,
+      contextInfo: {           
         forwardingScore: 999,
         isForwarded: true,
         forwardedNewsletterMessageInfo: {
-            newsletterJid: channelJid,
-            newsletterName: channelName,
-            serverMessageId: -1
+          newsletterJid: channelJid,
+          newsletterName: channelName,
+          serverMessageId: -1
         }
-    }
-}, { quoted: mek });
+      }
+    }, { quoted: mek });
   }
 });
 
@@ -240,9 +320,10 @@ cmd({
   filter: (text, { sender }) => pendingSearch[sender] && !isNaN(text) && parseInt(text) > 0 && parseInt(text) <= pendingSearch[sender].results.length
 }, async (danuwa, mek, m, { body, sender, reply, from }) => {
 
-    await danuwa.sendMessage(from, {
+  await danuwa.sendMessage(from, {
     react: { text: "✅", key: m.key }
   });
+  
   const index = parseInt(body) - 1;
   const selected = pendingSearch[sender].results[index];
   delete pendingSearch[sender];
@@ -265,15 +346,15 @@ cmd({
     await danuwa.sendMessage(from, { 
       image: { url: metadata.thumbnail }, 
       caption: msg,
-                contextInfo: {           
+      contextInfo: {           
         forwardingScore: 999,
         isForwarded: true,
         forwardedNewsletterMessageInfo: {
-            newsletterJid: channelJid,
-            newsletterName: channelName,
-            serverMessageId: -1
+          newsletterJid: channelJid,
+          newsletterName: channelName,
+          serverMessageId: -1
         }
-    }
+      }
     }, { quoted: mek });
   } else {
     await danuwa.sendMessage(from, { text: msg }, { quoted: mek });
@@ -281,7 +362,7 @@ cmd({
 
   // -------- Quality Selection --------
   const downloadLinks = await getPixeldrainLinks(selected.movieUrl);
-  if (!downloadLinks.length) return reply("*❌ No download links found (<2GB)!*");
+  if (!downloadLinks.length) return reply("*❌ No download links found (<1.5GB)!*");
 
   pendingQuality[sender] = { movie: { metadata, downloadLinks }, timestamp: Date.now() };
 
@@ -308,9 +389,10 @@ cmd({
   filter: (text, { sender }) => pendingQuality[sender] && !isNaN(text) && parseInt(text) > 0 && parseInt(text) <= pendingQuality[sender].movie.downloadLinks.length
 }, async (danuwa, mek, m, { body, sender, reply, from }) => {
 
-      await danuwa.sendMessage(from, {
+  await danuwa.sendMessage(from, {
     react: { text: "✅", key: m.key }
   });
+  
   const index = parseInt(body) - 1;
   const { movie } = pendingQuality[sender];
   delete pendingQuality[sender];
@@ -320,6 +402,8 @@ cmd({
 
   try {
     const directUrl = getDirectPixeldrainUrl(selectedLink.link);
+    
+    // Send document directly via URL (WhatsApp will download it)
     await danuwa.sendMessage(from, {
       document: { url: directUrl },
       mimetype: "video/mp4",
@@ -331,15 +415,15 @@ cmd({
 *💾 Size:* ${selectedLink.size}
 ─────────────────────────        
 🚀 Pow. By *DANUKA DISANAYAKA* 🔥`,
-        contextInfo: {       
+      contextInfo: {       
         forwardingScore: 999,
         isForwarded: true,
         forwardedNewsletterMessageInfo: {
-            newsletterJid: channelJid,
-            newsletterName: channelName,
-            serverMessageId: -1
+          newsletterJid: channelJid,
+          newsletterName: channelName,
+          serverMessageId: -1
         }
-    }
+      }
     }, { quoted: mek });
   } catch (error) {
     console.error("Send document error:", error);
