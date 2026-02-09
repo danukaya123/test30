@@ -50,57 +50,84 @@ function normalizeQuality(text) {
 }
 
 function getDirectPixeldrainUrl(url) {
-  const match = url.match(/pixeldrain\.com\/u\/(\w+)/);
+  const match = url.match(/pixeldrain\.com\/u\/([a-zA-Z0-9]+)/);
   if (!match) return null;
   return `https://pixeldrain.com/api/file/${match[1]}?download`;
 }
 
 // ---------- Direct WhatsApp Streaming ----------
-async function streamToWhatsAppDirectly(danuwa, from, pixeldrainUrl, fileName, caption, quoted) {
+async function streamToWhatsAppDirectly(
+  danuwa,
+  from,
+  pixeldrainUrl,
+  fileName,
+  caption,
+  quoted
+) {
   console.log(`🚀 Direct WhatsApp Streaming: ${fileName}`);
-  
+
   try {
-    // Create Vercel streaming URL
-    const encodedUrl = encodeURIComponent(pixeldrainUrl);
-    const encodedName = encodeURIComponent(fileName);
-    const vercelStreamUrl = `${VERCEL_URL}/api/stream?url=${encodedUrl}&filename=${encodedName}`;
-    
-    console.log(`🌐 Vercel → WhatsApp URL: ${vercelStreamUrl}`);
-    
-    // Send to WhatsApp - bot passes URL ONLY, doesn't download
-    const result = await danuwa.sendMessage(from, {
-      document: { 
-        url: vercelStreamUrl
-      },
-      mimetype: "video/mp4",
-      fileName: fileName,
-      caption: caption + `\n\n⚡ Direct Vercel → WhatsApp Stream\n🔒 Zero Bot Memory Usage`,
-      contextInfo: {       
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-          newsletterJid: channelJid,
-          newsletterName: channelName,
-          serverMessageId: -1
+    /* ================= PIXELDRAIN FIX ================= */
+    // Convert pixeldrain PAGE url → REAL file stream url
+    const directPixeldrainUrl = getDirectPixeldrainUrl(pixeldrainUrl);
+
+    if (!directPixeldrainUrl) {
+      throw new Error("Invalid Pixeldrain URL");
+    }
+
+    /* ================= VERCEL STREAM URL ================= */
+    const vercelStreamUrl =
+      `${VERCEL_URL}/api/stream` +
+      `?url=${encodeURIComponent(directPixeldrainUrl)}` +
+      `&filename=${encodeURIComponent(fileName)}`;
+
+    console.log(`🌐 Vercel → WhatsApp Stream URL:\n${vercelStreamUrl}`);
+
+    /* ================= SEND TO WHATSAPP ================= */
+    const result = await danuwa.sendMessage(
+      from,
+      {
+        document: { url: vercelStreamUrl },
+        mimetype: "video/mp4",
+        fileName: fileName,
+        caption:
+          caption +
+          `\n\n⚡ Direct Vercel → WhatsApp Stream` +
+          `\n💾 Zero bot memory usage`,
+        contextInfo: {
+          forwardingScore: 999,
+          isForwarded: true,
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: channelJid,
+            newsletterName: channelName,
+            serverMessageId: -1
+          }
         }
-      }
-    }, { quoted: quoted });
-    
-    console.log(`✅ WhatsApp streaming initiated`);
+      },
+      { quoted }
+    );
+
+    console.log("✅ WhatsApp streaming initiated successfully");
     return result;
-    
+
   } catch (error) {
-    console.error(`❌ WhatsApp streaming error:`, error);
-    
-    // Fallback: Send direct link
-    const directUrl = getDirectPixeldrainUrl(pixeldrainUrl);
-    await danuwa.sendMessage(from, {
-      text: `*⚠️ Direct Download Link*\n\n` +
-            `*File:* ${fileName}\n` +
-            `*Link:* ${directUrl}\n\n` +
-            `*Copy and paste in browser*`
-    }, { quoted: quoted });
-    
+    console.error("❌ WhatsApp streaming failed:", error.message);
+
+    /* ================= FALLBACK ================= */
+    const fallbackUrl = getDirectPixeldrainUrl(pixeldrainUrl);
+
+    await danuwa.sendMessage(
+      from,
+      {
+        text:
+          `*⚠️ Streaming failed*\n\n` +
+          `*🎬 File:* ${fileName}\n` +
+          `*🔗 Direct Download:*\n${fallbackUrl}\n\n` +
+          `*📥 Open in browser to download*`
+      },
+      { quoted }
+    );
+
     throw error;
   }
 }
@@ -400,14 +427,14 @@ cmd({
                     `*💾 Zero bot memory usage*`;
     
     // THIS IS THE KEY: Direct streaming, no bot memory
-    await streamToWhatsAppDirectly(
-      danuwa, 
-      from, 
-      selectedLink.link,
-      safeFileName,
-      caption,
-      mek
-    );
+await streamToWhatsAppDirectly(
+  danuwa,
+  from,
+  selectedLink.link, // page link → converted internally
+  safeFileName,
+  caption,
+  mek
+);
     
     console.log(`✅ Direct streaming completed`);
     
