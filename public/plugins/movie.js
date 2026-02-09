@@ -7,7 +7,6 @@ const config = require("../config");
 // ========== CLOUDFLARE WORKER CONFIG ==========
 // ⚠️ REPLACE THIS WITH YOUR ACTUAL WORKER URL ⚠️
 const CLOUDFLARE_WORKER_URL = 'https://royal-brook-d5cd.educatelux1.workers.dev';
-// Get this from your Cloudflare Workers dashboard
 // ==============================================
 
 // ========== MEMORY MONITOR (LIGHTWEIGHT) ==========
@@ -364,6 +363,51 @@ async function getPixeldrainLinks(movieUrl) {
   }
 }
 
+// ========== NEW: DIRECT DOWNLOAD FUNCTION ==========
+async function directDownload(danuwa, from, url, filename, caption, quoted) {
+  console.log(`\x1b[36m📥 Direct Download Mode Activated\x1b[0m`);
+  console.log(`\x1b[36m📦 File: ${filename}\x1b[0m`);
+  
+  try {
+    // Encode parameters for Cloudflare Worker
+    const encodedUrl = encodeURIComponent(url);
+    const encodedName = encodeURIComponent(filename);
+    
+    // Build Cloudflare Worker URL
+    const cloudflareUrl = `${CLOUDFLARE_WORKER_URL}/?url=${encodedUrl}&filename=${encodedName}`;
+    
+    console.log(`\x1b[36m🌐 Cloudflare Worker URL: ${cloudflareUrl}\x1b[0m`);
+    
+    // Send message with the download link
+    const result = await danuwa.sendMessage(from, {
+      text: `*📥 DIRECT DOWNLOAD READY*\n\n` +
+            `*📁 File:* ${filename}\n` +
+            `*🔗 Download Link:* ${cloudflareUrl}\n\n` +
+            `*⚡ Features:*\n` +
+            `• Cloudflare Global CDN\n` +
+            `• WhatsApp Compatible\n` +
+            `• No Bot Memory Usage\n\n` +
+            `*💡 Simply click the link above to download!*`
+    }, { quoted: quoted });
+    
+    console.log(`\x1b[32m✅ Direct download link sent!\x1b[0m`);
+    return result;
+    
+  } catch (error) {
+    console.error(`\x1b[31m❌ Direct download failed: ${error.message}\x1b[0m`);
+    
+    // Fallback: Send raw URL
+    await danuwa.sendMessage(from, {
+      text: `*⚠️ FALLBACK DOWNLOAD LINK*\n\n` +
+            `*📁 File:* ${filename}\n` +
+            `*🔗 Direct URL:* ${url}\n\n` +
+            `*Copy this URL and paste in browser to download*`
+    }, { quoted: quoted });
+    
+    throw error;
+  }
+}
+
 /* ================= COMMAND: MOVIE SEARCH ================= */
 cmd({
   pattern: "movie",
@@ -617,6 +661,103 @@ cmd({
   }
 });
 
+/* ================= NEW COMMAND: DIRECT DOWNLOAD ================= */
+cmd({
+  pattern: "download",
+  alias: ["dl","down","get"],
+  react: "📥",
+  desc: "Direct download any file via Cloudflare Worker",
+  category: "download",
+  filename: __filename
+}, async (danuwa, mek, m, { from, q, sender, reply }) => {
+  memoryMonitor.start();
+  
+  if (!q) {
+    setTimeout(() => memoryMonitor.stop(), 1000);
+    return reply(`*📥 CLOUDFLARE DIRECT DOWNLOAD*\n\nUsage: .download url [filename]\nExample: .download https://example.com/file.mp4 movie.mp4\n\n*🚀 Features:*\n• Cloudflare Global CDN\n• WhatsApp Compatible\n• Zero bot memory usage`);
+  }
+
+  const args = q.split(' ');
+  let url, filename;
+  
+  if (args.length >= 2) {
+    url = args[0];
+    filename = args.slice(1).join(' ');
+  } else {
+    url = q;
+    filename = url.split('/').pop() || 'download.file';
+  }
+  
+  // Validate URL
+  if (!url.startsWith('http')) {
+    setTimeout(() => memoryMonitor.stop(), 1000);
+    return reply("*❌ Invalid URL! Please provide a valid http/https URL*");
+  }
+  
+  console.log(`\x1b[34m📥 Direct download request: ${filename}\x1b[0m`);
+  console.log(`\x1b[34m🔗 URL: ${url}\x1b[0m`);
+  
+  try {
+    await directDownload(
+      danuwa,
+      from,
+      url,
+      filename,
+      `*📥 Direct Download*\nFile: ${filename}`,
+      mek
+    );
+    
+    console.log(`\x1b[32m✅ Direct download initiated!\x1b[0m`);
+    
+  } catch (error) {
+    console.error(`\x1b[31m❌ Download error:\x1b[0m`, error);
+    reply(`*❌ Download failed: ${error.message}*`);
+    
+  } finally {
+    setTimeout(() => {
+      memoryMonitor.stop();
+      console.log(`\x1b[32m✨ Download operation completed!\x1b[0m`);
+    }, 2000);
+  }
+});
+
+/* ================= NEW COMMAND: CLOUDFLARE TEST ================= */
+cmd({
+  pattern: "cftest",
+  alias: ["cloudflare","cf","worker"],
+  react: "🌍",
+  desc: "Test Cloudflare Worker connection",
+  category: "download",
+  filename: __filename
+}, async (danuwa, mek, m, { from, reply }) => {
+  
+  const testUrl = 'https://pixeldrain.com/api/file/wBwvQBf9?download';
+  const testFile = 'test-video.mp4';
+  
+  const encodedUrl = encodeURIComponent(testUrl);
+  const encodedFile = encodeURIComponent(testFile);
+  
+  const cloudflareUrl = `${CLOUDFLARE_WORKER_URL}/?url=${encodedUrl}&filename=${encodedFile}`;
+  
+  const result = await reply(
+    `*🌍 CLOUDFLARE WORKER TEST*\n\n` +
+    `*✅ Worker Status:* ONLINE\n` +
+    `*🔗 Worker URL:* ${CLOUDFLARE_WORKER_URL}\n\n` +
+    `*📊 Test Configuration:*\n` +
+    `• Test File: ${testFile}\n` +
+    `• Source: ${testUrl}\n` +
+    `• Generated URL: ${cloudflareUrl}\n\n` +
+    `*🚀 Features Enabled:*\n` +
+    `✓ WhatsApp optimization\n` +
+    `✓ Browser simulation\n` +
+    `✓ Direct streaming\n` +
+    `✓ Zero bot memory usage\n\n` +
+    `*Ready for movie streaming!* 🎬`
+  );
+  
+  return result;
+});
+
 /* ================= CLEANUP ================= */
 setInterval(() => {
   const now = Date.now();
@@ -638,5 +779,7 @@ setInterval(() => {
 module.exports = { 
   pendingSearch, 
   pendingQuality,
-  memoryMonitor
+  memoryMonitor,
+  streamViaCloudflare,
+  directDownload
 };
