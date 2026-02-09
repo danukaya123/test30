@@ -246,7 +246,7 @@ async function getPixeldrainLinks(movieUrl) {
           if (sizeText.includes("GB")) sizeMB = parseFloat(sizeText) * 1024;
           else if (sizeText.includes("MB")) sizeMB = parseFloat(sizeText);
           
-          if (sizeMB <= 500) { // 500MB limit for Vercel
+          if (sizeMB <= 2048) { // 500MB limit for Vercel
             links.push({ 
               link: finalUrl, 
               quality: normalizeQuality(l.quality), 
