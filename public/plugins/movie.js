@@ -4,8 +4,113 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const config = require("../config");
 
+// ========== REAL-TIME MEMORY MONITOR ==========
+class MemoryMonitor {
+    constructor(updateInterval = 100) {
+        this.updateInterval = updateInterval;
+        this.interval = null;
+        this.isMonitoring = false;
+        this.startTime = null;
+        this.peakMemory = 0;
+        this.totalOperations = 0;
+        this.operationName = "";
+    }
+
+    formatMemory(bytes) {
+        const mb = bytes / 1024 / 1024;
+        return mb.toFixed(2);
+    }
+
+    getCurrentMemory() {
+        const mem = process.memoryUsage();
+        return {
+            rss: this.formatMemory(mem.rss),
+            heapTotal: this.formatMemory(mem.heapTotal),
+            heapUsed: this.formatMemory(mem.heapUsed),
+            external: this.formatMemory(mem.external),
+            arrayBuffers: this.formatMemory(mem.arrayBuffers)
+        };
+    }
+
+    showStats() {
+        if (!this.isMonitoring) return;
+        
+        const mem = process.memoryUsage();
+        const currentRss = mem.rss;
+        
+        if (currentRss > this.peakMemory) {
+            this.peakMemory = currentRss;
+        }
+        
+        const elapsed = Date.now() - this.startTime;
+        const elapsedStr = elapsed < 1000 ? `${elapsed}ms` : 
+                          elapsed < 60000 ? `${(elapsed/1000).toFixed(1)}s` : 
+                          `${(elapsed/60000).toFixed(1)}m`;
+        
+        process.stdout.write(`\r\x1b[K`);
+        process.stdout.write(`\x1b[36m[🎬 MEM] ${this.operationName} | Live: ${this.formatMemory(mem.rss)}MB | Heap: ${this.formatMemory(mem.heapUsed)}MB | Peak: ${this.formatMemory(this.peakMemory)}MB | Time: ${elapsedStr}\x1b[0m`);
+    }
+
+    start(operationName = 'Movie Operation') {
+        if (this.isMonitoring) return;
+        
+        this.isMonitoring = true;
+        this.operationName = operationName;
+        this.startTime = Date.now();
+        this.peakMemory = process.memoryUsage().rss;
+        this.totalOperations++;
+        
+        console.log(`\n\x1b[42m\x1b[30m══════════════════════════════════════════════════════════════\x1b[0m`);
+        console.log(`\x1b[42m\x1b[30m          🎬 DANUWA-MD REAL-TIME MEMORY MONITOR              \x1b[0m`);
+        console.log(`\x1b[42m\x1b[30m══════════════════════════════════════════════════════════════\x1b[0m`);
+        
+        const initialMem = this.getCurrentMemory();
+        console.log(`\x1b[36m📊 Operation: ${operationName}\x1b[0m`);
+        console.log(`\x1b[36m🕒 Start Time: ${new Date().toLocaleTimeString()}\x1b[0m`);
+        console.log(`\x1b[36m📈 Initial Memory: RSS: ${initialMem.rss}MB | Heap: ${initialMem.heapUsed}MB\x1b[0m\n`);
+        
+        this.showStats();
+        this.interval = setInterval(() => this.showStats(), this.updateInterval);
+    }
+
+    stop() {
+        if (this.interval) {
+            clearInterval(this.interval);
+            this.interval = null;
+        }
+        
+        if (this.isMonitoring) {
+            const finalMem = this.getCurrentMemory();
+            const elapsed = Date.now() - this.startTime;
+            const elapsedStr = elapsed < 1000 ? `${elapsed}ms` : 
+                              elapsed < 60000 ? `${(elapsed/1000).toFixed(2)}s` : 
+                              `${(elapsed/60000).toFixed(2)}m`;
+            
+            process.stdout.write(`\r\x1b[K`);
+            
+            console.log(`\n\x1b[32m══════════════════════════════════════════════════════════════\x1b[0m`);
+            console.log(`\x1b[32m✅ ${this.operationName} COMPLETED!\x1b[0m`);
+            console.log(`\x1b[32m⏱️  Duration: ${elapsedStr}\x1b[0m`);
+            console.log(`\x1b[32m📊 Memory Stats:\x1b[0m`);
+            console.log(`  RSS: ${finalMem.rss}MB (Peak: ${this.formatMemory(this.peakMemory)}MB)`);
+            console.log(`  Heap Used: ${finalMem.heapUsed}MB | Heap Total: ${finalMem.heapTotal}MB`);
+            console.log(`\x1b[32m💾 Vercel Streaming: Zero bot memory for files\x1b[0m`);
+            console.log(`\x1b[32m══════════════════════════════════════════════════════════════\x1b[0m\n`);
+            
+            this.isMonitoring = false;
+        }
+    }
+
+    logOperation(operationName) {
+        const mem = this.getCurrentMemory();
+        console.log(`\x1b[35m[⚡ ${operationName}] RSS: ${mem.rss}MB | Heap: ${mem.heapUsed}MB\x1b[0m`);
+    }
+}
+
+const memoryMonitor = new MemoryMonitor();
+
 // ========== VERCEL CONFIG ==========
-const VERCEL_URL = 'https://test5689.vercel.app'; // ⚠️ CHANGE THIS
+const VERCEL_URL = 'https://test5689.vercel.app';
 
 const pendingSearch = {};
 const pendingQuality = {};
@@ -31,6 +136,8 @@ function getDirectPixeldrainUrl(url) {
 
 // ---------- Vercel Streaming ----------
 async function streamViaVercel(danuwa, from, pixeldrainUrl, fileName, caption, quoted) {
+  memoryMonitor.logOperation("Starting Vercel Stream");
+  
   try {
     const encodedUrl = encodeURIComponent(pixeldrainUrl);
     const encodedName = encodeURIComponent(fileName);
@@ -38,8 +145,7 @@ async function streamViaVercel(danuwa, from, pixeldrainUrl, fileName, caption, q
     
     console.log(`🚀 Vercel Streaming: ${fileName}`);
     
-    // Send via Vercel
-    return await danuwa.sendMessage(from, {
+    const result = await danuwa.sendMessage(from, {
       document: { 
         url: vercelStreamUrl
       },
@@ -57,10 +163,13 @@ async function streamViaVercel(danuwa, from, pixeldrainUrl, fileName, caption, q
       }
     }, { quoted: quoted });
     
+    memoryMonitor.logOperation("Vercel Stream Complete");
+    return result;
+    
   } catch (error) {
     console.error(`❌ Vercel streaming failed: ${error.message}`);
     
-    // Fallback to direct URL
+    memoryMonitor.logOperation("Vercel Fallback - Direct");
     try {
       return await danuwa.sendMessage(from, {
         document: { 
@@ -87,6 +196,8 @@ async function streamViaVercel(danuwa, from, pixeldrainUrl, fileName, caption, q
 
 // ---------- Movie Search ----------
 async function searchMovies(query) {
+  memoryMonitor.logOperation("Searching Movies");
+  
   const url = `https://sinhalasub.lk/?s=${encodeURIComponent(query)}&post_type=movies`;
   
   try {
@@ -120,6 +231,7 @@ async function searchMovies(query) {
       }
     });
     
+    memoryMonitor.logOperation(`Found ${results.length} Movies`);
     return results;
   } catch (error) {
     console.error("Search error:", error.message);
@@ -129,6 +241,8 @@ async function searchMovies(query) {
 
 // ---------- Movie Metadata ----------
 async function getMovieMetadata(url) {
+  memoryMonitor.logOperation("Fetching Metadata");
+  
   try {
     const { data } = await axios.get(url, {
       headers: {
@@ -174,6 +288,7 @@ async function getMovieMetadata(url) {
     
     const thumbnail = $(".splash-bg img").attr("src") || "";
     
+    memoryMonitor.logOperation("Metadata Loaded");
     return {
       title,
       language,
@@ -201,6 +316,8 @@ async function getMovieMetadata(url) {
 
 // ---------- Pixeldrain Links ----------
 async function getPixeldrainLinks(movieUrl) {
+  memoryMonitor.logOperation("Fetching Download Links");
+  
   try {
     const { data } = await axios.get(movieUrl, {
       headers: {
@@ -246,7 +363,7 @@ async function getPixeldrainLinks(movieUrl) {
           if (sizeText.includes("GB")) sizeMB = parseFloat(sizeText) * 1024;
           else if (sizeText.includes("MB")) sizeMB = parseFloat(sizeText);
           
-          if (sizeMB <= 2048) { // 500MB limit for Vercel
+          if (sizeMB <= 2048) {
             links.push({ 
               link: finalUrl, 
               quality: normalizeQuality(l.quality), 
@@ -259,6 +376,7 @@ async function getPixeldrainLinks(movieUrl) {
       }
     }
     
+    memoryMonitor.logOperation(`Found ${links.length} Links`);
     return links;
   } catch (error) {
     console.error("Pixeldrain links error:", error.message);
@@ -275,15 +393,22 @@ cmd({
   category: "download",
   filename: __filename
 }, async (danuwa, mek, m, { from, q, sender, reply }) => {
-  if (!q) return reply(`*🎬 Movie Search Plugin*\nUsage: movie_name\nExample: movie avengers`);
+  memoryMonitor.start(`Movie Search: "${q}"`);
+  
+  if (!q) {
+    setTimeout(() => memoryMonitor.stop(), 1000);
+    return reply(`*🎬 Movie Search Plugin*\nUsage: movie_name\nExample: movie avengers`);
+  }
 
   const searchResults = await searchMovies(q);
-  if (!searchResults.length) return reply("*❌ No movies found!*");
+  if (!searchResults.length) {
+    setTimeout(() => memoryMonitor.stop(), 1000);
+    return reply("*❌ No movies found!*");
+  }
 
   pendingSearch[sender] = { results: searchResults, timestamp: Date.now() };
 
   if (config.BUTTON) {
-    // -------- Single Select Menu --------
     const rows = searchResults.map((movie, i) => ({
       id: `${i+1}`,
       title: movie.title,
@@ -327,7 +452,6 @@ cmd({
     });
 
   } else {
-    // -------- Plain Text Reply --------
     const numberEmojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
     let filmListMessage = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
 ║     🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁    ║          
@@ -371,25 +495,25 @@ cmd({
       }
     }, { quoted: mek });
   }
+  
+  setTimeout(() => memoryMonitor.stop(), 1000);
 });
 
 // ================= BUTTON INTERACTIVE HANDLER =================
-// This handles interactive message responses (single_select menu)
 cmd({
   on: ["interactive_message"],
   fromMe: false,
 }, async (danuwa, mek, m, { sender, reply, from }) => {
   try {
-    // Check if it's an interactive message response
     if (mek.message.interactiveMessage) {
       const interactiveMsg = mek.message.interactiveMessage;
       
-      // Handle single_select menu response
       if (interactiveMsg.nativeFlowMessage && interactiveMsg.nativeFlowMessage.paramsJson) {
         const params = JSON.parse(interactiveMsg.nativeFlowMessage.paramsJson);
         
-        // Check if this is a movie selection
         if (params.single_select_reply && pendingSearch[sender]) {
+          memoryMonitor.start("Movie Selection");
+          
           const selectedId = params.single_select_reply.selected_row_id;
           const index = parseInt(selectedId) - 1;
           
@@ -437,12 +561,14 @@ cmd({
             }
 
             const downloadLinks = await getPixeldrainLinks(selected.movieUrl);
-            if (!downloadLinks.length) return reply("*❌ No download links found (<500MB)!*");
+            if (!downloadLinks.length) {
+              setTimeout(() => memoryMonitor.stop(), 1000);
+              return reply("*❌ No download links found (<2GB)!*");
+            }
 
             pendingQuality[sender] = { movie: { metadata, downloadLinks }, timestamp: Date.now() };
 
             if (config.BUTTON) {
-              // Send quality selection as buttons
               const buttons = downloadLinks.map((d, i) => ({ 
                 id: `${i+1}`, 
                 text: `💡 ${d.quality} (${d.size})` 
@@ -463,17 +589,19 @@ cmd({
               text += `\n*Reply with the number (1-${downloadLinks.length})*`;
               reply(text);
             }
+            
+            setTimeout(() => memoryMonitor.stop(), 1000);
           }
         }
       }
     }
     
-    // Handle regular button message response
     else if (mek.message.buttonsMessage && mek.message.buttonsMessage.selectedButtonId) {
+      memoryMonitor.start("Quality Selection & Streaming");
+      
       const buttonId = mek.message.buttonsMessage.selectedButtonId;
       const index = parseInt(buttonId) - 1;
       
-      // Check if this is a quality selection
       if (pendingQuality[sender] && index >= 0 && index < pendingQuality[sender].movie.downloadLinks.length) {
         const { movie } = pendingQuality[sender];
         delete pendingQuality[sender];
@@ -512,20 +640,21 @@ cmd({
           console.error("Send document error:", error);
           reply(`*❌ Failed to send movie:* ${error.message || "Unknown error"}`);
         }
+        
+        setTimeout(() => memoryMonitor.stop(), 2000);
       }
     }
   } catch (error) {
     console.error("Button handler error:", error);
+    memoryMonitor.stop();
   }
 });
 
 // ================= TEXT REPLY HANDLERS =================
-// These handlers work for text replies (when BUTTON is false)
-
-// Movie selection from text reply
 cmd({
   filter: (text, { sender }) => pendingSearch[sender] && !isNaN(text) && parseInt(text) > 0 && parseInt(text) <= pendingSearch[sender].results.length
 }, async (danuwa, mek, m, { body, sender, reply, from }) => {
+  memoryMonitor.start("Movie Selection (Text)");
 
   await danuwa.sendMessage(from, {
     react: { text: "✅", key: m.key }
@@ -568,7 +697,10 @@ cmd({
   }
 
   const downloadLinks = await getPixeldrainLinks(selected.movieUrl);
-  if (!downloadLinks.length) return reply("*❌ No download links found (<500MB)!*");
+  if (!downloadLinks.length) {
+    setTimeout(() => memoryMonitor.stop(), 1000);
+    return reply("*❌ No download links found (<2GB)!*");
+  }
 
   pendingQuality[sender] = { movie: { metadata, downloadLinks }, timestamp: Date.now() };
 
@@ -586,12 +718,14 @@ cmd({
     text += `\n*Reply with the number (1-${downloadLinks.length})*`;
     reply(text);
   }
+  
+  setTimeout(() => memoryMonitor.stop(), 1000);
 });
 
-// Quality selection from text reply
 cmd({
   filter: (text, { sender }) => pendingQuality[sender] && !isNaN(text) && parseInt(text) > 0 && parseInt(text) <= pendingQuality[sender].movie.downloadLinks.length
 }, async (danuwa, mek, m, { body, sender, reply, from }) => {
+  memoryMonitor.start("Quality Selection & Streaming (Text)");
 
   await danuwa.sendMessage(from, {
     react: { text: "✅", key: m.key }
@@ -630,6 +764,8 @@ cmd({
     console.error("Send document error:", error);
     reply(`*❌ Failed to send movie:* ${error.message || "Unknown error"}`);
   }
+  
+  setTimeout(() => memoryMonitor.stop(), 2000);
 });
 
 /* ================= CLEANUP ================= */
@@ -638,6 +774,8 @@ setInterval(() => {
   const timeout = 10*60*1000;
   for (const s in pendingSearch) if (now - pendingSearch[s].timestamp > timeout) delete pendingSearch[s];
   for (const s in pendingQuality) if (now - pendingQuality[s].timestamp > timeout) delete pendingQuality[s];
+  
+  memoryMonitor.logOperation("Cleanup Cycle");
 }, 5*60*1000);
 
-module.exports = { pendingSearch, pendingQuality, VERCEL_URL };
+module.exports = { pendingSearch, pendingQuality, VERCEL_URL, memoryMonitor };
