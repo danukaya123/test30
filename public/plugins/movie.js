@@ -47,20 +47,33 @@ function getDirectPixeldrainUrl(url) {
 // Upload movie to Telegram
 async function uploadToTelegram(fileId) {
   try {
-    // Use a public CORS proxy that adds headers
-    const corsProxies = [
-      `https://api.codetabs.com/v1/proxy?quest=https://pixeldrain.com/api/file/${fileId}?download=1`,
-      `https://corsproxy.io/?${encodeURIComponent(`https://pixeldrain.com/api/file/${fileId}?download=1`)}`,
-      `https://thingproxy.freeboard.io/fetch/https://pixeldrain.com/api/file/${fileId}?download=1`
+    // Try different proxy services with longer timeouts
+    const proxyConfigs = [
+      {
+        url: `https://api.codetabs.com/v1/proxy?quest=https://pixeldrain.com/api/file/${fileId}?download=1`,
+        timeout: 300000 // 5 minutes
+      },
+      {
+        url: `https://allorigins.win/raw?url=${encodeURIComponent(`https://pixeldrain.com/api/file/${fileId}?download=1`)}`,
+        timeout: 300000
+      },
+      {
+        url: `https://cors-anywhere.herokuapp.com/https://pixeldrain.com/api/file/${fileId}?download=1`,
+        timeout: 300000
+      },
+      {
+        url: `https://proxy.cors.sh/https://pixeldrain.com/api/file/${fileId}?download=1`,
+        headers: { 'x-cors-api-key': 'temp_xxxxxxxx' } // Get from cors.sh
+      }
     ];
     
-    for (const proxyUrl of corsProxies) {
+    for (const config of proxyConfigs) {
       try {
-        console.log("📤 Trying proxy:", proxyUrl);
+        console.log("📤 Trying proxy:", config.url);
         
-        const msg = await tgBot.sendDocument(TELEGRAM_CHAT_ID, proxyUrl, {
-          caption: "🚀 Movie via Proxy",
-          timeout: 180000,
+        const msg = await tgBot.sendDocument(TELEGRAM_CHAT_ID, config.url, {
+          caption: "🚀 Movie via DANUWA-MD",
+          timeout: config.timeout || 300000, // 5 minutes timeout
           disable_notification: true
         });
         
@@ -72,6 +85,7 @@ async function uploadToTelegram(fileId) {
       }
     }
     
+    console.error("❌ All proxies failed");
     return null;
   } catch (err) {
     console.error("Telegram upload error:", err);
