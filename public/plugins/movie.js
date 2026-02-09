@@ -7,6 +7,7 @@ const config = require("../config");
 // ========== REALTIME MEMORY MONITOR ==========
 class MemoryMonitor {
     constructor(updateInterval = 100) {
+        this.updateInterval = updateInterval; // Fixed: store as instance variable
         this.interval = null;
         this.isMonitoring = false;
         this.startTime = null;
@@ -81,9 +82,12 @@ class MemoryMonitor {
         
         this.updateDisplay();
         
+        // FIXED: Use this.updateInterval instead of updateInterval
         this.interval = setInterval(() => {
             this.updateDisplay();
-        }, updateInterval);
+        }, this.updateInterval); // Fixed here
+        
+        console.log('\x1b[33m📊 Memory monitoring started (Updates every 100ms)\x1b[0m\n');
     }
 
     stop() {
@@ -468,7 +472,7 @@ cmd({
     let filmListMessage = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
 ║     🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁    ║          
 ╚═━━━━━━━◢◤◆◥◣━━━━━━━━═╝  
-    📂 𝗠𝗢𝗩𝗜𝗘 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥 📂  
+    📂 𝗠𝗢𝗩𝗜𝗘 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗢 📂  
 ┏━━━━━━━━━━━━━━━━━━━━━━┓  
 ┃ 🔰 𝗖𝗛𝗢𝗢𝗦𝗘 𝗬𝗢𝗨𝗥 MOVIE         
 ┃ 💬 *FOUND ${searchResults.length} MOVIES FOR "${q}"*❕    
