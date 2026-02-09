@@ -1,46 +1,182 @@
-// movie-vercel.js - Complete Vercel Streaming Plugin
+// movie.js - Vercel Streaming Plugin
 const { cmd } = require("../command");
+const { sendButtons, sendInteractiveMessage } = require("gifted-btns");
 const axios = require("axios");
 const cheerio = require("cheerio");
+const config = require("../config");
 
-// ========== CONFIGURATION ==========
-// ⚠️ SET YOUR VERCEL URL HERE ⚠️
-const VERCEL_URL = 'https://test5689.vercel.app'; // Replace with your Vercel URL
+// ========== VERCEL CONFIG ==========
+// ⚠️ REPLACE WITH YOUR VERCEL URL ⚠️
+const VERCEL_URL = 'https://test5689.vercel.app'; // Change this!
 
-// Cache for search results (5 minutes)
-const searchCache = new Map();
-const metadataCache = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+// ========== MEMORY MONITOR ==========
+class MemoryMonitor {
+    constructor(updateInterval = 500) {
+        this.updateInterval = updateInterval;
+        this.interval = null;
+        this.isMonitoring = false;
+        this.startTime = null;
+    }
 
-// ========== VERCEL STREAMING FUNCTIONS ==========
-function getStreamUrl(pixeldrainUrl, filename, method = 'stream') {
-  const encodedUrl = encodeURIComponent(pixeldrainUrl);
-  const encodedName = encodeURIComponent(filename);
-  return `${VERCEL_URL}/api/${method}?url=${encodedUrl}&filename=${encodedName}`;
+    formatMemory(bytes) {
+        const mb = bytes / 1024 / 1024;
+        return mb.toFixed(2);
+    }
+
+    showStats() {
+        if (!this.isMonitoring) return;
+        
+        const mem = process.memoryUsage();
+        const elapsed = Date.now() - this.startTime;
+        const elapsedStr = elapsed < 1000 ? `${elapsed}ms` : `${(elapsed/1000).toFixed(1)}s`;
+        
+        console.log(`\x1b[36m[🎬 MOVIE] Time: ${elapsedStr} | RAM: ${this.formatMemory(mem.rss)}MB | Heap: ${this.formatMemory(mem.heapUsed)}MB\x1b[0m`);
+    }
+
+    start() {
+        if (this.isMonitoring) return;
+        
+        this.isMonitoring = true;
+        this.startTime = Date.now();
+        
+        console.log('\x1b[42m\x1b[30m══════════════════════════════════════════════════════════════\x1b[0m');
+        console.log('\x1b[42m\x1b[30m          🎬 DANUWA MOVIE + VERCEL STREAMING              \x1b[0m');
+        console.log('\x1b[42m\x1b[30m══════════════════════════════════════════════════════════════\x1b[0m');
+        console.log(`\x1b[36m🌍 Vercel URL: ${VERCEL_URL}\x1b[0m`);
+        console.log(`\x1b[36m💡 Streaming via Vercel Serverless (Zero bot memory)\x1b[0m\n`);
+        
+        this.showStats();
+        this.interval = setInterval(() => this.showStats(), this.updateInterval);
+    }
+
+    stop() {
+        if (this.interval) {
+            clearInterval(this.interval);
+            this.interval = null;
+        }
+        
+        if (this.isMonitoring) {
+            const mem = process.memoryUsage();
+            console.log('\n\x1b[32m════════════════════════════════════════════════════\x1b[0m');
+            console.log(`\x1b[32m✅ Streaming completed!\x1b[0m`);
+            console.log(`\x1b[32m📊 Final RAM: ${this.formatMemory(mem.rss)}MB\x1b[0m`);
+            console.log(`\x1b[32m💾 Heap: ${this.formatMemory(mem.heapUsed)}MB\x1b[0m`);
+            console.log(`\x1b[32m🌍 Vercel handled all heavy lifting\x1b[0m`);
+            console.log('\x1b[32m════════════════════════════════════════════════════\x1b[0m\n');
+        }
+        
+        this.isMonitoring = false;
+    }
 }
 
-// ========== MOVIE SEARCH FUNCTIONS ==========
-async function searchMovies(query, useCache = true) {
-  const cacheKey = `search:${query.toLowerCase()}`;
-  
-  if (useCache && searchCache.has(cacheKey)) {
-    const cached = searchCache.get(cacheKey);
-    if (Date.now() - cached.timestamp < CACHE_TTL) {
-      console.log(`📂 Using cached search results for: ${query}`);
-      return cached.results;
-    }
-  }
-  
-  console.log(`🔍 Searching movies: ${query}`);
+const memoryMonitor = new MemoryMonitor();
+
+// ========== VERCEL STREAMING FUNCTION ==========
+async function streamViaVercel(danuwa, from, pixeldrainUrl, fileName, caption, quoted) {
+  console.log(`\x1b[36m🚀 Vercel Streaming Activated\x1b[0m`);
+  console.log(`\x1b[36m📦 File: ${fileName}\x1b[0m`);
   
   try {
-    const searchUrl = `https://sinhalasub.lk/?s=${encodeURIComponent(query)}&post_type=movies`;
+    // Encode parameters for Vercel API
+    const encodedUrl = encodeURIComponent(pixeldrainUrl);
+    const encodedName = encodeURIComponent(fileName);
     
-    const { data } = await axios.get(searchUrl, {
+    // Build Vercel streaming URL
+    const vercelStreamUrl = `${VERCEL_URL}/api/stream?url=${encodedUrl}&filename=${encodedName}`;
+    
+    console.log(`\x1b[36m🌐 Vercel URL: ${vercelStreamUrl}\x1b[0m`);
+    console.log(`\x1b[33m⚡ Streaming via Vercel Serverless...\x1b[0m`);
+    
+    // Send to WhatsApp via Vercel
+    const result = await danuwa.sendMessage(from, {
+      document: { 
+        url: vercelStreamUrl  // WhatsApp downloads from Vercel
+      },
+      mimetype: "video/mp4",
+      fileName: fileName,
+      caption: caption + `\n\n⚡ Streamed via Vercel Serverless\n🌍 Global CDN Network\n🔒 Zero Bot Memory Usage\n📊 Vercel Hobby Plan (2GB RAM)`,
+      contextInfo: {       
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+          newsletterJid: channelJid,
+          newsletterName: channelName,
+          serverMessageId: -1
+        }
+      }
+    }, { quoted: quoted });
+    
+    console.log(`\x1b[32m✅ Vercel streaming successful!\x1b[0m`);
+    console.log(`\x1b[32m📊 WhatsApp is downloading from Vercel edge server\x1b[0m`);
+    
+    return result;
+    
+  } catch (error) {
+    console.error(`\x1b[31m❌ Vercel streaming failed: ${error.message}\x1b[0m`);
+    
+    // Fallback: Try direct URL
+    console.log(`\x1b[33m🔄 Falling back to direct URL...\x1b[0m`);
+    
+    try {
+      const fallbackResult = await danuwa.sendMessage(from, {
+        document: { 
+          url: pixeldrainUrl  // Direct URL as fallback
+        },
+        mimetype: "video/mp4",
+        fileName: fileName,
+        caption: caption + `\n\n⚠️ Direct Download (Fallback Mode)`,
+        contextInfo: {       
+          forwardingScore: 999,
+          isForwarded: true,
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: channelJid,
+            newsletterName: channelName,
+            serverMessageId: -1
+          }
+        }
+      }, { quoted: quoted });
+      
+      console.log(`\x1b[32m✅ Direct fallback successful\x1b[0m`);
+      return fallbackResult;
+      
+    } catch (fallbackError) {
+      console.error(`\x1b[31m❌ All streaming methods failed\x1b[0m`);
+      throw new Error(`Streaming failed: ${error.message}`);
+    }
+  }
+}
+
+// ========== HELPER FUNCTIONS ==========
+const pendingSearch = {};
+const pendingQuality = {};
+const channelJid = '120363418166326365@newsletter'; 
+const channelName = '🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁';
+const imageUrl = "https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/film.png?raw=true";
+
+function normalizeQuality(text) {
+  if (!text) return null;
+  text = text.toUpperCase();
+  if (/1080|FHD/.test(text)) return "1080p";
+  if (/720|HD/.test(text)) return "720p";
+  if (/480|SD/.test(text)) return "480p";
+  return text;
+}
+
+function getDirectPixeldrainUrl(url) {
+  const match = url.match(/pixeldrain\.com\/u\/(\w+)/);
+  if (!match) return null;
+  return `https://pixeldrain.com/api/file/${match[1]}?download`;
+}
+
+// ========== SEARCH FUNCTIONS ==========
+async function searchMovies(query) {
+  console.log(`\x1b[34m🔍 Searching movies for: ${query}\x1b[0m`);
+  const url = `https://sinhalasub.lk/?s=${encodeURIComponent(query)}&post_type=movies`;
+  
+  try {
+    const { data } = await axios.get(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       },
       timeout: 10000
     });
@@ -48,58 +184,39 @@ async function searchMovies(query, useCache = true) {
     const $ = cheerio.load(data);
     const results = [];
     
-    $('.display-item .item-box').each((index, element) => {
-      const $el = $(element);
-      const title = $el.find('a[title]').attr('title')?.trim();
-      const url = $el.find('a[href]').attr('href');
-      const image = $el.find('.thumb').attr('src');
-      const language = $el.find('.language').text().trim() || 'Sinhala';
-      const quality = $el.find('.quality').text().trim() || 'HD';
+    $(".display-item .item-box").slice(0, 10).each((index, box) => {
+      const $box = $(box);
+      const a = $box.find("a");
+      const img = $box.find(".thumb");
+      const lang = $box.find(".item-desc-giha .language").text() || "";
+      const quality = $box.find(".item-desc-giha .quality").text() || "";
+      const qty = $box.find(".item-desc-giha .qty").text() || "";
       
-      if (title && url) {
+      if (a.attr("href") && a.attr("title")) {
         results.push({
           id: index + 1,
-          title,
-          url,
-          image,
-          language,
-          quality,
-          year: title.match(/(\d{4})/)?.[1] || 'Unknown'
+          title: a.attr("title").trim(),
+          movieUrl: a.attr("href"),
+          thumb: img.attr("src") || "",
+          language: lang.trim(),
+          quality: quality.trim(),
+          qty: qty.trim()
         });
       }
     });
     
-    // Cache results
-    if (useCache && results.length > 0) {
-      searchCache.set(cacheKey, {
-        results: results.slice(0, 8), // Cache only first 8 results
-        timestamp: Date.now()
-      });
-    }
-    
-    console.log(`✅ Found ${results.length} movies`);
-    return results.slice(0, 8); // Return max 8 results
-    
+    console.log(`\x1b[32m✅ Found ${results.length} movies\x1b[0m`);
+    return results;
   } catch (error) {
-    console.error(`❌ Search error: ${error.message}`);
+    console.error(`\x1b[31m❌ Search error: ${error.message}\x1b[0m`);
     return [];
   }
 }
 
-async function getMovieMetadata(movieUrl, useCache = true) {
-  const cacheKey = `meta:${movieUrl}`;
-  
-  if (useCache && metadataCache.has(cacheKey)) {
-    const cached = metadataCache.get(cacheKey);
-    if (Date.now() - cached.timestamp < CACHE_TTL) {
-      return cached.metadata;
-    }
-  }
-  
-  console.log(`📥 Fetching metadata: ${movieUrl}`);
-  
+async function getMovieMetadata(url) {
+  console.log(`\x1b[34m📥 Fetching metadata...\x1b[0m`);
   try {
-    const { data } = await axios.get(movieUrl, {
+    const { data } = await axios.get(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       },
@@ -108,336 +225,480 @@ async function getMovieMetadata(movieUrl, useCache = true) {
     
     const $ = cheerio.load(data);
     
-    // Extract metadata
-    const metadata = {
-      title: $('.details-title h3').text().trim() || 'Unknown',
-      description: $('.splash-desc p').text().trim() || '',
-      thumbnail: $('.splash-bg img').attr('src') || '',
-      duration: $('[itemprop="duration"]').text().trim() || '',
-      imdb: $('.data-imdb').text().replace('IMDb:', '').trim() || 'N/A',
-      genres: [],
-      directors: [],
-      stars: [],
-      downloadLinks: []
-    };
+    const title = $(".info-details .details-title h3").text().trim();
+    let language = "";
+    const directors = [];
+    const stars = [];
     
-    // Extract genres
-    $('.details-genre a').each((i, el) => {
-      metadata.genres.push($(el).text().trim());
-    });
-    
-    // Extract download links (pixeldrain)
-    $('a[href*="pixeldrain"]').each((i, el) => {
-      const href = $(el).attr('href');
-      const text = $(el).text().trim();
-      
-      if (href && href.includes('pixeldrain.com/u/')) {
-        const match = href.match(/pixeldrain\.com\/u\/(\w+)/);
-        if (match) {
-          const quality = text.includes('1080') ? '1080p' : 
-                         text.includes('720') ? '720p' : 
-                         text.includes('480') ? '480p' : 'SD';
-          
-          const directUrl = `https://pixeldrain.com/api/file/${match[1]}?download`;
-          
-          metadata.downloadLinks.push({
-            quality,
-            url: directUrl,
-            source: 'pixeldrain',
-            label: text || quality
+    $(".info-col p").each((i, p) => {
+      const $p = $(p);
+      const strong = $p.find("strong");
+      if (strong.length) {
+        const txt = strong.text().trim();
+        if (txt.includes("Language:")) {
+          language = $(strong[0].nextSibling).text().trim();
+        }
+        if (txt.includes("Director:")) {
+          $p.find("a").each((j, a) => {
+            directors.push($(a).text().trim());
+          });
+        }
+        if (txt.includes("Stars:")) {
+          $p.find("a").each((j, a) => {
+            stars.push($(a).text().trim());
           });
         }
       }
     });
     
-    // If no pixeldrain links found, look for other download links
-    if (metadata.downloadLinks.length === 0) {
-      $('a[href*="download"], a[href*=".mp4"], a[href*=".mkv"]').each((i, el) => {
-        const href = $(el).attr('href');
-        const text = $(el).text().trim();
-        
-        if (href && (href.includes('http') || href.includes('//'))) {
-          const fullUrl = href.startsWith('http') ? href : new URL(href, movieUrl).href;
-          
-          metadata.downloadLinks.push({
-            quality: 'Unknown',
-            url: fullUrl,
-            source: 'direct',
-            label: text || 'Download'
-          });
-        }
-      });
-    }
+    const duration = $(".data-views[itemprop='duration']").text().trim();
+    const imdb = $(".data-imdb").text().replace("IMDb:", "").trim();
     
-    // Cache metadata
-    if (useCache) {
-      metadataCache.set(cacheKey, {
-        metadata,
-        timestamp: Date.now()
-      });
-    }
+    const genres = [];
+    $(".details-genre a").each((i, a) => {
+      genres.push($(a).text().trim());
+    });
     
-    console.log(`✅ Metadata loaded with ${metadata.downloadLinks.length} links`);
-    return metadata;
+    const thumbnail = $(".splash-bg img").attr("src") || "";
     
-  } catch (error) {
-    console.error(`❌ Metadata error: ${error.message}`);
+    console.log(`\x1b[32m✅ Metadata loaded: ${title}\x1b[0m`);
     return {
-      title: 'Unknown',
-      description: '',
-      thumbnail: '',
-      downloadLinks: []
+      title,
+      language,
+      duration,
+      imdb,
+      genres,
+      directors,
+      stars,
+      thumbnail
+    };
+  } catch (error) {
+    console.error(`\x1b[31m❌ Metadata error: ${error.message}\x1b[0m`);
+    return {
+      title: "",
+      language: "",
+      duration: "",
+      imdb: "",
+      genres: [],
+      directors: [],
+      stars: [],
+      thumbnail: ""
     };
   }
 }
 
-// ========== USER SESSION MANAGEMENT ==========
-const userSessions = new Map();
-
-function setUserSession(userId, data) {
-  userSessions.set(userId, {
-    ...data,
-    timestamp: Date.now()
-  });
+async function getPixeldrainLinks(movieUrl) {
+  console.log(`\x1b[34m🔗 Fetching download links...\x1b[0m`);
+  try {
+    const { data } = await axios.get(movieUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      timeout: 15000
+    });
+    
+    const $ = cheerio.load(data);
+    const rows = [];
+    
+    $(".link-pixeldrain tbody tr").each((i, tr) => {
+      const $tr = $(tr);
+      const a = $tr.find(".link-opt a");
+      const quality = $tr.find(".quality").text().trim() || "";
+      const size = $tr.find("td:nth-child(3) span").text().trim() || "";
+      
+      if (a.attr("href")) {
+        rows.push({
+          pageLink: a.attr("href"),
+          quality,
+          size
+        });
+      }
+    });
+    
+    const links = [];
+    
+    for (const l of rows.slice(0, 3)) {
+      try {
+        const { data: pageData } = await axios.get(l.pageLink, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': movieUrl
+          },
+          timeout: 10000
+        });
+        
+        const $$ = cheerio.load(pageData);
+        const finalUrl = $$(".wait-done a[href^='https://pixeldrain.com/']").attr("href");
+        
+        if (finalUrl) {
+          const directUrl = getDirectPixeldrainUrl(finalUrl);
+          
+          if (directUrl) {
+            let sizeMB = 0;
+            const sizeText = l.size.toUpperCase();
+            if (sizeText.includes("GB")) sizeMB = parseFloat(sizeText) * 1024;
+            else if (sizeText.includes("MB")) sizeMB = parseFloat(sizeText);
+            
+            if (sizeMB <= 500) { // Limit to 500MB for Vercel
+              links.push({ 
+                link: directUrl,
+                quality: normalizeQuality(l.quality), 
+                size: l.size
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`\x1b[31m❌ Link processing error: ${error.message}\x1b[0m`);
+      }
+    }
+    
+    console.log(`\x1b[32m✅ Found ${links.length} streaming links\x1b[0m`);
+    return links;
+  } catch (error) {
+    console.error(`\x1b[31m❌ Pixeldrain links error: ${error.message}\x1b[0m`);
+    return [];
+  }
 }
 
-function getUserSession(userId) {
-  const session = userSessions.get(userId);
-  if (session && Date.now() - session.timestamp < 10 * 60 * 1000) { // 10 minutes
-    return session;
+// ========== VERCEL STATUS CHECK ==========
+async function checkVercelStatus() {
+  try {
+    const response = await axios.get(`${VERCEL_URL}/api/ping`, {
+      timeout: 5000
+    });
+    return response.data.status === 'online';
+  } catch (error) {
+    console.error(`\x1b[31m❌ Vercel status check failed: ${error.message}\x1b[0m`);
+    return false;
   }
-  userSessions.delete(userId);
-  return null;
 }
 
 // ========== COMMANDS ==========
 
-/* ================= MOVIE SEARCH COMMAND ================= */
+/* ================= COMMAND: MOVIE SEARCH ================= */
 cmd({
   pattern: "movie",
-  alias: ["film", "sinhalasub", "cinema", "movies"],
+  alias: ["sinhalasub","films","cinema","film"],
   react: "🎬",
-  desc: "Search and stream movies via Vercel (Zero bot memory)",
+  desc: "Search SinhalaSub movies (Vercel Streaming)",
   category: "download",
   filename: __filename
 }, async (danuwa, mek, m, { from, q, sender, reply }) => {
+  memoryMonitor.start();
   
   if (!q) {
-    return reply(`*🎬 VERCEL MOVIE STREAMING*\n\n*Usage:* .movie <movie_name>\n*Example:* .movie avatar\n\n*Features:*\n• Zero bot memory usage\n• Vercel serverless streaming\n• Fast global CDN\n• WhatsApp optimized\n\n*Powered by DANUWA-MD*`);
+    setTimeout(() => memoryMonitor.stop(), 1000);
+    return reply(`*🎬 VERCEL MOVIE STREAMING*\n\nUsage: .movie name\nExample: .movie avengers\n\n*🚀 Features:*\n• Vercel Serverless CDN\n• Zero bot memory usage\n• WhatsApp optimized\n• Free Vercel Hobby Plan\n\n*Vercel URL:* ${VERCEL_URL}`);
   }
-  
-  console.log(`👤 ${sender} searching: ${q}`);
-  
-  await reply(`*🔍 Searching movies for "${q}"...*`);
-  
-  const movies = await searchMovies(q);
-  
-  if (!movies.length) {
-    return reply(`*❌ No movies found for "${q}"*\n\nTry a different search term or check spelling.`);
-  }
-  
-  // Store in session
-  setUserSession(sender, {
-    type: 'search',
-    query: q,
-    movies,
-    step: 'select_movie'
-  });
-  
-  // Create selection message
-  let message = `*🎬 Found ${movies.length} Movies*\n\n`;
-  
-  movies.forEach((movie, index) => {
-    message += `${index + 1}. *${movie.title}*\n`;
-    message += `   🎭 ${movie.language} | 📁 ${movie.quality} | 📅 ${movie.year}\n\n`;
-  });
-  
-  message += `*Reply with number (1-${movies.length}) to select movie*\n`;
-  message += `*Files will stream via Vercel (No bot memory used)*`;
-  
-  await danuwa.sendMessage(from, { text: message }, { quoted: mek });
-});
 
-/* ================= MOVIE SELECTION HANDLER ================= */
-cmd({
-  filter: (text, { sender }) => {
-    const session = getUserSession(sender);
-    return session && 
-           session.type === 'search' && 
-           session.step === 'select_movie' &&
-           !isNaN(text) && 
-           parseInt(text) > 0 && 
-           parseInt(text) <= session.movies.length;
+  // Check Vercel status
+  const vercelOnline = await checkVercelStatus();
+  if (!vercelOnline) {
+    await reply(`*⚠️ Vercel Status: OFFLINE*\n\nPlease check:\n1. Vercel deployment\n2. VERCEL_URL in config\n3. Try direct download for now`);
   }
-}, async (danuwa, mek, m, { body, sender, reply, from }) => {
-  
-  const session = getUserSession(sender);
-  const movieIndex = parseInt(body) - 1;
-  const selectedMovie = session.movies[movieIndex];
-  
-  console.log(`👤 ${sender} selected: ${selectedMovie.title}`);
-  
-  await reply(`*📥 Loading "${selectedMovie.title}"...*`);
-  
-  // Get movie metadata and download links
-  const metadata = await getMovieMetadata(selectedMovie.url);
-  
-  if (!metadata.downloadLinks.length) {
-    return reply(`*❌ No download links found for this movie*\n\nTry another movie or check the website.`);
-  }
-  
-  // Update session
-  setUserSession(sender, {
-    type: 'quality_select',
-    movie: selectedMovie,
-    metadata,
-    downloadLinks: metadata.downloadLinks,
-    step: 'select_quality'
-  });
-  
-  // Create quality selection message
-  let message = `*🎬 ${metadata.title}*\n`;
-  
-  if (metadata.imdb && metadata.imdb !== 'N/A') {
-    message += `⭐ IMDb: ${metadata.imdb}\n`;
-  }
-  
-  if (metadata.duration) {
-    message += `⏱️ Duration: ${metadata.duration}\n`;
-  }
-  
-  if (metadata.genres.length) {
-    message += `🎭 Genres: ${metadata.genres.join(', ')}\n`;
-  }
-  
-  message += `\n*📥 Available Download Links:*\n\n`;
-  
-  metadata.downloadLinks.forEach((link, index) => {
-    message += `${index + 1}. *${link.quality}*\n`;
-    if (link.source === 'pixeldrain') {
-      message += `   🔗 ${link.label}\n`;
-    }
-    message += `\n`;
-  });
-  
-  message += `*Reply with number (1-${metadata.downloadLinks.length}) to stream via Vercel*\n`;
-  message += `*Zero bot memory usage - Vercel handles everything*`;
-  
-  await reply(message);
-});
 
-/* ================= STREAM VIA VERCEL ================= */
-cmd({
-  filter: (text, { sender }) => {
-    const session = getUserSession(sender);
-    return session && 
-           session.type === 'quality_select' && 
-           session.step === 'select_quality' &&
-           !isNaN(text) && 
-           parseInt(text) > 0 && 
-           parseInt(text) <= session.downloadLinks.length;
+  const searchResults = await searchMovies(q);
+  if (!searchResults.length) {
+    setTimeout(() => memoryMonitor.stop(), 1000);
+    return reply("*❌ No movies found!*");
   }
-}, async (danuwa, mek, m, { body, sender, reply, from }) => {
-  
-  const session = getUserSession(sender);
-  const linkIndex = parseInt(body) - 1;
-  const selectedLink = session.downloadLinks[linkIndex];
-  
-  console.log(`🚀 Streaming: ${session.movie.title} - ${selectedLink.quality}`);
-  
-  // Create safe filename
-  const safeFilename = `${session.metadata.title.substring(0, 50)} - ${selectedLink.quality}.mp4`
-    .replace(/[^\w\s.-]/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  
-  // Generate Vercel streaming URL
-  const vercelStreamUrl = getStreamUrl(selectedLink.url, safeFilename);
-  
-  console.log(`🌐 Vercel URL: ${vercelStreamUrl}`);
-  
-  // Send progress message
-  const progressMsg = await reply(`*🚀 Starting Vercel Streaming...*\n\n` +
-    `*Movie:* ${session.metadata.title}\n` +
-    `*Quality:* ${selectedLink.quality}\n` +
-    `*Method:* Vercel Serverless Proxy\n` +
-    `*Status:* Initializing stream...\n\n` +
-    `⚠️ *Please wait 10-30 seconds*\n` +
-    `Vercel is fetching and streaming the movie...`);
-  
-  try {
-    // Send to WhatsApp via Vercel
-    const result = await danuwa.sendMessage(from, {
-      document: {
-        url: vercelStreamUrl
-      },
-      mimetype: "video/mp4",
-      fileName: safeFilename,
-      caption: `🎬 *${session.metadata.title}*\n` +
-               `📊 ${selectedLink.quality}\n` +
-               `🚀 Streamed via Vercel\n` +
-               `⚡ Zero bot memory usage\n` +
-               `🌍 Global CDN delivery\n\n` +
-               `Powered by *DANUWA-MD*`,
-      contextInfo: {
+
+  pendingSearch[sender] = { results: searchResults, timestamp: Date.now() };
+
+  if (config.BUTTON) {
+    const rows = searchResults.map((movie, i) => ({
+      id: `${i+1}`,
+      title: movie.title,
+      description: `Language: ${movie.language} | Quality: ${movie.quality}`
+    }));
+
+    const interactiveButtons = [{
+      name: "single_select",
+      buttonParamsJson: JSON.stringify({
+        title: "Movie Search Results",
+        sections: [{ title: "Select a movie (Vercel Streaming)", rows }]
+      })
+    }];
+
+    const caption = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
+║     🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁    ║          
+╚═━━━━━━━◢◤◆◥◣━━━━━━━━═╝  
+    📂 𝗩𝗘𝗥𝗖𝗘𝗟 𝗦𝗧𝗥𝗘𝗔𝗠𝗜𝗡𝗚 📂  
+┏━━━━━━━━━━━━━━━━━━━━━━┓  
+┃ 🔰 𝗖𝗛𝗢𝗢𝗦𝗘 𝗬𝗢𝗨𝗥 MOVIE         
+┃ 💬 *FOUND ${searchResults.length} MOVIES FOR "${q}"*❕  
+┃ 🚀 *Streaming via Vercel Serverless*  
+┃ 💾 *Max: 500MB per file*  
+┗━━━━━━━━━━━━━━━━━━━━━━┛  
+┃━━━━━━━━━━━━━━━━━━━━━━✦
+┃   ⚙️ M A D E  W I T H ❤️ B Y 
+╰─🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥─╯
+
+─────────────────────────`;
+    
+    await danuwa.sendMessage(from, { image: { url: imageUrl } }, { quoted: mek });
+    await sendInteractiveMessage(danuwa, from, { text: caption, interactiveButtons, quoted: mek });
+
+  } else {
+    const numberEmojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
+    let filmListMessage = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
+║     🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁    ║          
+╚═━━━━━━━◢◤◆◥◣━━━━━━━━═╝  
+    📂 𝗩𝗘𝗥𝗖𝗘𝗟 𝗦𝗧𝗥𝗘𝗔𝗠𝗜𝗡𝗚 📂  
+┏━━━━━━━━━━━━━━━━━━━━━━┓  
+┃ 🔰 𝗖𝗛𝗢𝗢𝗦𝗘 𝗬𝗢𝗨𝗥 MOVIE         
+┃ 💬 *FOUND ${searchResults.length} MOVIES FOR "${q}"*❕    
+┃ 🚀 *Streaming via Vercel Serverless*  
+┃ 💾 *Max: 500MB per file*  
+┗━━━━━━━━━━━━━━━━━━━━━━┛  
+┃━━━━━━━━━━━━━━━━━━━━━━✦
+┃   ⚙️ M A D E  W I T H ❤️ B Y 
+╰─🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥─╯
+
+─────────────────────────`;
+
+    searchResults.forEach((movie, index) => {
+      let adjustedIndex = index + 1;
+      let emojiIndex = adjustedIndex
+        .toString()
+        .split("")
+        .map(num => numberEmojis[num])
+        .join("");
+
+      filmListMessage += `${emojiIndex} *${movie.title}*\n`;
+      filmListMessage += `   📁 ${movie.quality} | 🎭 ${movie.language}\n\n`;
+    });
+
+    filmListMessage += `*📝 Reply with movie number (1-${searchResults.length})*\n`;
+    filmListMessage += `*🚀 Vercel Streaming: Zero bot memory usage*\n`;
+    filmListMessage += `*🌍 Server: ${VERCEL_URL}*`;
+
+    await danuwa.sendMessage(from, {
+      image: { url: imageUrl },
+      caption: filmListMessage,
+      contextInfo: {           
         forwardingScore: 999,
         isForwarded: true,
         forwardedNewsletterMessageInfo: {
-          newsletterJid: '120363418166326365@newsletter',
-          newsletterName: '🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁',
+          newsletterJid: channelJid,
+          newsletterName: channelName,
           serverMessageId: -1
         }
       }
     }, { quoted: mek });
+  }
+  
+  console.log('\x1b[33m⏳ Waiting for user selection...\x1b[0m');
+});
+
+/* ================= COMMAND: MOVIE SELECTION ================= */
+cmd({
+  on: "text",
+  fromMe: false,
+  dontAddCommandList: true
+}, async (danuwa, mek, m, { body, sender, reply, from }) => {
+  // Check if this is a movie selection
+  if (pendingSearch[sender] && !isNaN(body) && parseInt(body) > 0 && parseInt(body) <= pendingSearch[sender].results.length) {
     
-    console.log(`✅ Movie sent successfully via Vercel`);
+    await danuwa.sendMessage(from, { react: { text: "✅", key: mek.key } });
     
-    // Delete progress message
-    if (progressMsg) {
-      await danuwa.sendMessage(from, {
-        delete: progressMsg.key
+    const index = parseInt(body) - 1;
+    const selected = pendingSearch[sender].results[index];
+    delete pendingSearch[sender];
+
+    console.log(`\x1b[34m🎬 Selected: ${selected.title}\x1b[0m`);
+    
+    await reply("*🔍 Fetching movie details...*");
+    const metadata = await getMovieMetadata(selected.movieUrl);
+
+    let msg = `───────────────────────── 
+*🎬 ${metadata.title}*
+───────────────────────── 
+*📝 Language:* ${metadata.language}
+*⏱️ Duration:* ${metadata.duration}
+*⭐ IMDb:* ${metadata.imdb}
+*🎭 Genres:* ${metadata.genres.join(", ")}
+*🎥 Directors:* ${metadata.directors.join(", ")}
+───────────────────────── 
+*🔄 Getting Vercel streaming links...*`;
+
+    if (metadata.thumbnail) {
+      await danuwa.sendMessage(from, { 
+        image: { url: metadata.thumbnail }, 
+        caption: msg,
+        contextInfo: {           
+          forwardingScore: 999,
+          isForwarded: true,
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: channelJid,
+            newsletterName: channelName,
+            serverMessageId: -1
+          }
+        }
+      }, { quoted: mek });
+    } else {
+      await danuwa.sendMessage(from, { text: msg }, { quoted: mek });
+    }
+
+    const downloadLinks = await getPixeldrainLinks(selected.movieUrl);
+    if (!downloadLinks.length) {
+      setTimeout(() => memoryMonitor.stop(), 1000);
+      return reply("*❌ No streaming links found!*");
+    }
+
+    pendingQuality[sender] = { movie: { metadata, downloadLinks }, timestamp: Date.now() };
+
+    if (config.BUTTON) {
+      const buttons = downloadLinks.map((d, i) => ({ 
+        id: `${i+1}`, 
+        text: `🎬 ${d.quality} (${d.size})` 
+      }));
+      
+      await sendButtons(danuwa, from, { 
+        text: "─────────────────────────\n*📝 CHOOSE STREAMING QUALITY 🚀*\n*🌍 Streaming via Vercel Serverless*\n*💾 Max 500MB per file*\n─────────────────────────", 
+        buttons 
+      }, { quoted: mek });
+    } else {
+      let text = `─────────────────────────
+*📝 CHOOSE STREAMING QUALITY 🚀*
+─────────────────────────
+*🌍 Vercel Serverless Features:*
+• Zero bot memory usage (2GB RAM limit)
+• Global CDN network
+• WhatsApp optimized
+• Max file size: 500MB
+─────────────────────────
+`;
+      
+      downloadLinks.forEach((d, i) => {
+        text += `${i+1}. 🎬 *${d.quality}* (${d.size})\n`;
       });
+      
+      text += `\n─────────────────────────\n`;
+      text += `*📝 Reply with number (1-${downloadLinks.length})*\n`;
+      text += `*🚀 Files will stream via Vercel Serverless*`;
+      
+      await reply(text);
     }
     
-    // Clear session
-    userSessions.delete(sender);
-    
-    return result;
-    
-  } catch (error) {
-    console.error(`❌ Streaming error:`, error);
-    
-    // Update progress message with error
-    await danuwa.sendMessage(from, {
-      text: `*❌ Vercel Streaming Failed*\n\n` +
-            `*Error:* ${error.message}\n\n` +
-            `*Fallback Options:*\n` +
-            `1. Try a different quality\n` +
-            `2. Use direct download link:\n${selectedLink.url}\n` +
-            `3. Try again in a few minutes\n\n` +
-            `*Copy the link above and paste in browser to download.*`,
-      edit: progressMsg?.key
-    });
-    
-    // Clear session on error
-    userSessions.delete(sender);
+    console.log('\x1b[33m⏳ Waiting for quality selection...\x1b[0m');
   }
 });
 
-/* ================= DIRECT DOWNLOAD COMMAND ================= */
+/* ================= COMMAND: QUALITY SELECTION ================= */
 cmd({
-  pattern: "dls",
-  alias: ["stream", "vercel"],
+  on: "text",
+  fromMe: false,
+  dontAddCommandList: true
+}, async (danuwa, mek, m, { body, sender, reply, from }) => {
+  // Check if this is a quality selection
+  if (pendingQuality[sender] && !isNaN(body) && parseInt(body) > 0 && parseInt(body) <= pendingQuality[sender].movie.downloadLinks.length) {
+
+    await danuwa.sendMessage(from, { react: { text: "✅", key: mek.key } });
+    
+    const index = parseInt(body) - 1;
+    const { movie } = pendingQuality[sender];
+    delete pendingQuality[sender];
+
+    const selectedLink = movie.downloadLinks[index];
+    console.log(`\x1b[34m🚀 Streaming: ${selectedLink.quality} - ${selectedLink.size}\x1b[0m`);
+    
+    await reply(`*🚀 Starting Vercel streaming of ${selectedLink.quality}...*\n\n*📦 Size: ${selectedLink.size}*\n*🌍 Method: Vercel Serverless*\n*⏱️ Please wait 10-30 seconds...*`);
+
+    try {
+      const safeFileName = `${movie.metadata.title.substring(0,50)} - ${selectedLink.quality}.mp4`
+        .replace(/[^\w\s.-]/gi,'')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      const caption = `───────────────────────── 
+*🎬 ${movie.metadata.title}*
+───────────────────────── 
+*📊 Quality:* ${selectedLink.quality}
+*💾 Size:* ${selectedLink.size}
+*🚀 Method:* Vercel Serverless
+*🌍 Network:* Global CDN
+*💡 Memory:* Zero bot usage
+*📊 Vercel:* 2GB RAM Hobby Plan
+─────────────────────────        
+🎥 Powered By *DANUKA DISANAYAKA* 🔥`;
+      
+      await streamViaVercel(
+        danuwa, 
+        from, 
+        selectedLink.link,
+        safeFileName,
+        caption,
+        mek
+      );
+      
+      console.log(`\x1b[32m✅ Vercel streaming completed!\x1b[0m`);
+      
+    } catch (error) {
+      console.error(`\x1b[31m❌ Streaming error:\x1b[0m`, error);
+      
+      await reply(`*⚠️ Vercel streaming failed!*\n\n*Error:* ${error.message}\n\n*Try direct download:*\n${selectedLink.link}`);
+      
+    } finally {
+      setTimeout(() => {
+        memoryMonitor.stop();
+        console.log(`\x1b[32m✨ Movie operation completed!\x1b[0m`);
+      }, 3000);
+    }
+  }
+});
+
+/* ================= VERCEL STATUS COMMAND ================= */
+cmd({
+  pattern: "vstatus",
+  alias: ["vercel","vercelstatus"],
+  react: "🌍",
+  desc: "Check Vercel streaming status",
+  category: "download",
+  filename: __filename
+}, async (danuwa, mek, m, { from, reply }) => {
+  
+  const isOnline = await checkVercelStatus();
+  
+  if (isOnline) {
+    await reply(`*🌍 VERCEL STATUS*\n\n` +
+                `✅ Status: ONLINE\n` +
+                `🔗 URL: ${VERCEL_URL}\n` +
+                `💾 Plan: Hobby (2GB RAM)\n` +
+                `🚀 Streaming: Ready\n` +
+                `🌍 CDN: Global\n\n` +
+                `*Endpoints:*\n` +
+                `• ${VERCEL_URL}/api/stream\n` +
+                `• ${VERCEL_URL}/api/ping\n\n` +
+                `*Ready for movie streaming!* 🎬`);
+  } else {
+    await reply(`*🌍 VERCEL STATUS*\n\n` +
+                `❌ Status: OFFLINE\n` +
+                `🔗 URL: ${VERCEL_URL}\n` +
+                `⚠️ Error: Cannot connect\n\n` +
+                `*Please check:*\n` +
+                `1. Vercel deployment status\n` +
+                `2. VERCEL_URL in plugin config\n` +
+                `3. Internet connection\n\n` +
+                `*Current config:*\n\`${VERCEL_URL}\``);
+  }
+});
+
+/* ================= DIRECT STREAM COMMAND ================= */
+cmd({
+  pattern: "vstream",
+  alias: ["vs","vercelstream"],
   react: "⚡",
   desc: "Direct stream any file via Vercel",
   category: "download",
   filename: __filename
-}, async (danuwa, mek, m, { from, q, sender, reply }) => {
+}, async (danuwa, mek, m, { from, q, reply }) => {
   
   if (!q) {
-    return reply(`*⚡ DIRECT VERCEL STREAM*\n\n*Usage:* .dls <url> [filename]\n*Example:* .dls https://example.com/file.mp4 movie.mp4\n\n*Max file size:* 2GB\n*Streaming via Vercel CDN*`);
+    return reply(`*⚡ VERCEL DIRECT STREAM*\n\nUsage: .vstream url [filename]\nExample: .vstream https://example.com/file.mp4 movie.mp4\n\n*Max file size:* 500MB\n*Streaming via Vercel Serverless*`);
   }
-  
+
   const args = q.split(' ');
   let url, filename;
   
@@ -454,16 +715,20 @@ cmd({
     return reply(`*❌ Invalid URL*\n\nPlease provide a valid http/https URL.`);
   }
   
-  console.log(`⚡ Direct stream: ${filename}`);
+  console.log(`⚡ Direct Vercel stream: ${filename}`);
   
-  const vercelStreamUrl = getStreamUrl(url, filename);
-  
-  await reply(`*⚡ Streaming via Vercel...*\n\n` +
-              `*File:* ${filename}\n` +
-              `*URL:* ${url.substring(0, 50)}...\n` +
-              `*Status:* Initializing...`);
+  memoryMonitor.start();
   
   try {
+    const encodedUrl = encodeURIComponent(url);
+    const encodedName = encodeURIComponent(filename);
+    const vercelStreamUrl = `${VERCEL_URL}/api/stream?url=${encodedUrl}&filename=${encodedName}`;
+    
+    await reply(`*⚡ Starting Vercel stream...*\n\n` +
+                `*File:* ${filename}\n` +
+                `*Vercel URL:* ${vercelStreamUrl.substring(0, 60)}...\n` +
+                `*Status:* Initializing...`);
+    
     await danuwa.sendMessage(from, {
       document: {
         url: vercelStreamUrl
@@ -471,115 +736,51 @@ cmd({
       mimetype: "application/octet-stream",
       fileName: filename,
       caption: `📥 *${filename}*\n` +
-               `⚡ Streamed via Vercel\n` +
+               `⚡ Streamed via Vercel Serverless\n` +
                `🌍 Zero bot memory usage\n` +
-               `🚀 Fast CDN delivery`,
+               `🚀 Global CDN delivery`,
       contextInfo: {
         forwardingScore: 999,
         isForwarded: true
       }
     }, { quoted: mek });
     
-    console.log(`✅ Direct stream successful`);
+    console.log(`✅ Direct Vercel stream successful`);
     
   } catch (error) {
     console.error(`❌ Direct stream error:`, error);
-    await reply(`*❌ Streaming failed*\n\n*Error:* ${error.message}\n\n*Direct URL:* ${url}`);
+    await reply(`*❌ Vercel streaming failed*\n\n*Error:* ${error.message}\n\n*Direct URL:* ${url}`);
+  } finally {
+    setTimeout(() => {
+      memoryMonitor.stop();
+    }, 2000);
   }
 });
 
-/* ================= VERCEL STATUS COMMAND ================= */
-cmd({
-  pattern: "vstatus",
-  alias: ["vercelstatus", "vping"],
-  react: "🌍",
-  desc: "Check Vercel streaming status",
-  category: "download",
-  filename: __filename
-}, async (danuwa, mek, m, { from, reply }) => {
-  
-  try {
-    const pingUrl = `${VERCEL_URL}/api/ping`;
-    const response = await axios.get(pingUrl, { timeout: 5000 });
-    
-    await reply(`*🌍 VERCEL STREAMING STATUS*\n\n` +
-                `✅ Status: ONLINE\n` +
-                `🔗 URL: ${VERCEL_URL}\n` +
-                `📊 Version: ${response.data.version || '1.0.0'}\n` +
-                `🕒 Uptime: ${response.data.timestamp || 'Active'}\n\n` +
-                `*Endpoints:*\n` +
-                `• /api/stream - Main streaming\n` +
-                `• /api/proxy - Fast proxy\n` +
-                `• /api/ping - Health check\n\n` +
-                `*Ready for movie streaming!* 🎬`);
-    
-  } catch (error) {
-    await reply(`*🌍 VERCEL STREAMING STATUS*\n\n` +
-                `❌ Status: OFFLINE\n` +
-                `🔗 URL: ${VERCEL_URL}\n` +
-                `⚠️ Error: ${error.message}\n\n` +
-                `*Please check:*\n` +
-                `1. Vercel deployment status\n` +
-                `2. Internet connection\n` +
-                `3. VERCEL_URL in plugin config`);
-  }
-});
-
-/* ================= CLEAR CACHE COMMAND ================= */
-cmd({
-  pattern: "clearmovie",
-  alias: ["movieclear"],
-  react: "🧹",
-  desc: "Clear movie cache and sessions",
-  category: "download",
-  filename: __filename
-}, async (danuwa, mek, m, { from, sender, reply }) => {
-  
-  // Clear caches
-  searchCache.clear();
-  metadataCache.clear();
-  userSessions.delete(sender);
-  
-  await reply(`*🧹 Cache Cleared*\n\n` +
-              `✅ Search cache cleared\n` +
-              `✅ Metadata cache cleared\n` +
-              `✅ Your session cleared\n\n` +
-              `All caches have been reset.`);
-});
-
-// ========== CLEANUP ROUTINE ==========
+/* ================= CLEANUP ================= */
 setInterval(() => {
   const now = Date.now();
-  const sessionTTL = 30 * 60 * 1000; // 30 minutes
+  const timeout = 10 * 60 * 1000; // 10 minutes
   
-  // Cleanup user sessions
-  for (const [userId, session] of userSessions) {
-    if (now - session.timestamp > sessionTTL) {
-      userSessions.delete(userId);
-      console.log(`🧹 Cleaned expired session: ${userId}`);
+  for (const s in pendingSearch) {
+    if (now - pendingSearch[s].timestamp > timeout) {
+      delete pendingSearch[s];
     }
   }
   
-  // Cleanup search cache
-  for (const [key, data] of searchCache) {
-    if (now - data.timestamp > CACHE_TTL) {
-      searchCache.delete(key);
+  for (const s in pendingQuality) {
+    if (now - pendingQuality[s].timestamp > timeout) {
+      delete pendingQuality[s];
     }
   }
-  
-  // Cleanup metadata cache
-  for (const [key, data] of metadataCache) {
-    if (now - data.timestamp > CACHE_TTL) {
-      metadataCache.delete(key);
-    }
-  }
-}, 5 * 60 * 1000); // Run every 5 minutes
+}, 2 * 60 * 1000); // Check every 2 minutes
 
 // ========== MODULE EXPORTS ==========
-module.exports = {
-  userSessions,
-  searchCache,
-  metadataCache,
+module.exports = { 
+  pendingSearch, 
+  pendingQuality,
+  memoryMonitor,
+  streamViaVercel,
   VERCEL_URL,
-  getStreamUrl
+  checkVercelStatus
 };
