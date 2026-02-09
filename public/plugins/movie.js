@@ -45,32 +45,38 @@ function getDirectPixeldrainUrl(url) {
 }
 
 // Upload movie to Telegram
-async function uploadToTelegram(fileUrlFormats) {
-  if (!fileUrlFormats || !Array.isArray(fileUrlFormats)) {
-    console.error("Invalid fileUrlFormats:", fileUrlFormats);
+async function uploadToTelegram(fileId) {
+  try {
+    // Use a public CORS proxy that adds headers
+    const corsProxies = [
+      `https://api.codetabs.com/v1/proxy?quest=https://pixeldrain.com/api/file/${fileId}?download=1`,
+      `https://corsproxy.io/?${encodeURIComponent(`https://pixeldrain.com/api/file/${fileId}?download=1`)}`,
+      `https://thingproxy.freeboard.io/fetch/https://pixeldrain.com/api/file/${fileId}?download=1`
+    ];
+    
+    for (const proxyUrl of corsProxies) {
+      try {
+        console.log("📤 Trying proxy:", proxyUrl);
+        
+        const msg = await tgBot.sendDocument(TELEGRAM_CHAT_ID, proxyUrl, {
+          caption: "🚀 Movie via Proxy",
+          timeout: 180000,
+          disable_notification: true
+        });
+        
+        console.log("✅ Success with proxy!");
+        return msg.document.file_id;
+      } catch (err) {
+        console.log("❌ Proxy failed:", err.message);
+        continue;
+      }
+    }
+    
+    return null;
+  } catch (err) {
+    console.error("Telegram upload error:", err);
     return null;
   }
-  
-  for (const url of fileUrlFormats) {
-    try {
-      console.log("📤 Trying Telegram upload with:", url);
-      
-      const msg = await tgBot.sendDocument(TELEGRAM_CHAT_ID, url, {
-        caption: "🚀 Movie Uploaded via DANUWA-MD",
-        timeout: 180000, // 3 minutes
-        disable_notification: true
-      });
-      
-      console.log("✅ Telegram upload successful!");
-      return msg.document.file_id;
-    } catch (err) {
-      console.log(`❌ Failed: ${err.message}`);
-      // Continue to next URL
-    }
-  }
-  
-  console.error("❌ All Telegram upload attempts failed");
-  return null;
 }
 
 // ---------- Movie Search ----------
@@ -319,6 +325,7 @@ cmd({
 });
 
 /* ================= SEND MOVIE ================= */
+/* ================= SEND MOVIE ================= */
 cmd({
   filter: (text, { sender }) => pendingQuality[sender] && !isNaN(text) && parseInt(text) > 0 && parseInt(text) <= pendingQuality[sender].movie.downloadLinks.length
 }, async (danuwa, mek, m, { body, sender, reply, from }) => {
@@ -333,15 +340,16 @@ cmd({
   await reply(`*📤 Processing ${selectedLink.quality} quality...*\n_This may take a few minutes_`);
 
   try {
-    // Get multiple URL formats
-    const pixeldrainUrls = getDirectPixeldrainUrl(selectedLink.link);
-    
-    if (!pixeldrainUrls || pixeldrainUrls.length === 0) {
-      throw new Error("Could not generate download URLs");
+    // Extract fileId from Pixeldrain URL
+    const match = selectedLink.link.match(/pixeldrain\.com\/u\/(\w+)/);
+    if (!match) {
+      throw new Error("Invalid Pixeldrain URL");
     }
     
-    // Try Telegram upload
-    const telegramFileId = await uploadToTelegram(pixeldrainUrls);
+    const fileId = match[1];
+    
+    // Try Telegram upload with CORS proxy
+    const telegramFileId = await uploadToTelegram(fileId);
     
     if (!telegramFileId) {
       // Telegram failed, send direct link
