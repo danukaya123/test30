@@ -4,40 +4,62 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const config = require("../config");
 
-// ========== REALTIME MEMORY MONITOR ==========
+// ========== MULTI-LINE UPDATING CONSOLE MONITOR ==========
 class MemoryMonitor {
-    constructor(updateInterval = 1) {
+    constructor(updateInterval = 100) {
         this.interval = null;
         this.isMonitoring = false;
         this.startTime = null;
-        this.lineCount = 0;
+        this.lineCount = 8; // Number of lines in our display
+        this.currentLines = [];
     }
 
     formatMemory(bytes) {
         const mb = bytes / 1024 / 1024;
-        return mb.toFixed(2) + ' MB';
+        return mb.toFixed(2);
     }
 
-    displayStats() {
+    getMemoryStats() {
         const mem = process.memoryUsage();
         const elapsed = Date.now() - this.startTime;
         
-        // Clear previous stats lines
-        for (let i = 0; i < this.lineCount; i++) {
-            process.stdout.write('\x1B[1A\x1B[2K');
-        }
+        return {
+            elapsed: elapsed < 1000 ? `${elapsed} ms` : `${(elapsed/1000).toFixed(1)} s`,
+            rss: this.formatMemory(mem.rss),
+            heapUsed: this.formatMemory(mem.heapUsed),
+            heapTotal: this.formatMemory(mem.heapTotal),
+            external: this.formatMemory(mem.external)
+        };
+    }
+
+    createDisplay(stats) {
+        const lines = [];
+        lines.push(`╔══════════════════════════════════════════════════╗`);
+        lines.push(`║      🎬 MOVIE PLUGIN - REALTIME MEMORY MONITOR   ║`);
+        lines.push(`╠══════════════════════════════════════════════════╣`);
+        lines.push(`║  ⏱️  Uptime: ${stats.elapsed.padEnd(12)}                ║`);
+        lines.push(`║  📊 RSS: ${stats.rss.padEnd(8)} MB                      ║`);
+        lines.push(`║  💾 Heap Used: ${stats.heapUsed.padEnd(8)} MB              ║`);
+        lines.push(`║  🔥 Heap Total: ${stats.heapTotal.padEnd(8)} MB             ║`);
+        lines.push(`║  🌐 External: ${stats.external.padEnd(8)} MB               ║`);
+        lines.push(`╚══════════════════════════════════════════════════╝`);
+        return lines;
+    }
+
+    updateDisplay() {
+        const stats = this.getMemoryStats();
+        const newLines = this.createDisplay(stats);
         
-        console.log(`\x1b[36m╔══════════════════════════════════════════════════╗\x1b[0m`);
-        console.log(`\x1b[36m║      🎬 MOVIE PLUGIN - REALTIME MEMORY MONITOR   ║\x1b[0m`);
-        console.log(`\x1b[36m╠══════════════════════════════════════════════════╣\x1b[0m`);
-        console.log(`\x1b[33m║  ⏱️  Uptime: ${String(elapsed).padEnd(8)} ms                 ║\x1b[0m`);
-        console.log(`\x1b[33m║  📊 RSS: ${this.formatMemory(mem.rss).padEnd(15)}          ║\x1b[0m`);
-        console.log(`\x1b[33m║  💾 Heap Used: ${this.formatMemory(mem.heapUsed).padEnd(10)}       ║\x1b[0m`);
-        console.log(`\x1b[33m║  🔥 Heap Total: ${this.formatMemory(mem.heapTotal).padEnd(10)}      ║\x1b[0m`);
-        console.log(`\x1b[33m║  🌐 External: ${this.formatMemory(mem.external).padEnd(11)}        ║\x1b[0m`);
-        console.log(`\x1b[36m╚══════════════════════════════════════════════════╝\x1b[0m`);
+        // Move cursor up to the start of our display
+        process.stdout.write('\x1B[' + this.lineCount + 'A');
         
-        this.lineCount = 9; // Number of lines we just printed
+        // Print all lines
+        newLines.forEach(line => {
+            process.stdout.write('\x1B[2K'); // Clear line
+            console.log(`\x1b[36m${line}\x1b[0m`);
+        });
+        
+        this.currentLines = newLines;
     }
 
     start() {
@@ -45,23 +67,21 @@ class MemoryMonitor {
         
         this.isMonitoring = true;
         this.startTime = Date.now();
-        this.lineCount = 0;
         
-        // Clear console and show initial header
-        console.clear();
-        console.log('\x1b[42m\x1b[30m══════════════════════════════════════════════════════════════\x1b[0m');
-        console.log('\x1b[42m\x1b[30m             🎬 DANUWA MOVIE DOWNLOADER ACTIVATED             \x1b[0m');
-        console.log('\x1b[42m\x1b[30m══════════════════════════════════════════════════════════════\x1b[0m\n');
+        console.log('\n'); // Add some space
+        this.currentLines = this.createDisplay(this.getMemoryStats());
         
-        // Initial display
-        this.displayStats();
+        // Print initial display
+        this.currentLines.forEach(line => {
+            console.log(`\x1b[36m${line}\x1b[0m`);
+        });
         
-        // Update every 1ms
+        // Start updating
         this.interval = setInterval(() => {
-            this.displayStats();
-        }, 1);
+            this.updateDisplay();
+        }, 100); // Update every 100ms
         
-        console.log('\x1b[32m✅ Memory monitoring started (1ms updates)\x1b[0m\n');
+        console.log('\x1b[33m📊 Monitoring started - Updating every 100ms\x1b[0m\n');
     }
 
     stop() {
@@ -71,14 +91,13 @@ class MemoryMonitor {
         }
         this.isMonitoring = false;
         
-        // Clear monitoring display
-        for (let i = 0; i < this.lineCount; i++) {
-            process.stdout.write('\x1B[1A\x1B[2K');
+        // Clear the display area
+        process.stdout.write('\x1B[' + (this.lineCount + 1) + 'A');
+        for (let i = 0; i < this.lineCount + 2; i++) {
+            process.stdout.write('\x1B[2K\n');
         }
         
-        console.log('\x1b[32m════════════════════════════════════════════════════\x1b[0m');
-        console.log('\x1b[32m✅ Memory monitoring stopped                       \x1b[0m');
-        console.log('\x1b[32m════════════════════════════════════════════════════\x1b[0m\n');
+        console.log('\x1b[32m✅ Memory monitoring stopped\x1b[0m\n');
     }
 }
 
@@ -91,7 +110,7 @@ const channelJid = '120363418166326365@newsletter';
 const channelName = '🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁';
 const imageUrl = "https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/film.png?raw=true";
 
-// ---------- Helpers ----------
+// Helper functions remain the same...
 function normalizeQuality(text) {
   if (!text) return null;
   text = text.toUpperCase();
@@ -107,7 +126,7 @@ function getDirectPixeldrainUrl(url) {
   return `https://pixeldrain.com/api/file/${match[1]}?download`;
 }
 
-// ---------- Movie Search ----------
+// Movie search function...
 async function searchMovies(query) {
   console.log(`\x1b[34m🔍 Searching movies for: ${query}\x1b[0m`);
   const url = `https://sinhalasub.lk/?s=${encodeURIComponent(query)}&post_type=movies`;
@@ -151,9 +170,9 @@ async function searchMovies(query) {
   }
 }
 
-// ---------- Movie Metadata ----------
+// Movie metadata function...
 async function getMovieMetadata(url) {
-  console.log(`\x1b[34m📥 Fetching metadata from: ${url}\x1b[0m`);
+  console.log(`\x1b[34m📥 Fetching metadata...\x1b[0m`);
   try {
     const { data } = await axios.get(url, {
       headers: {
@@ -199,7 +218,6 @@ async function getMovieMetadata(url) {
     
     const thumbnail = $(".splash-bg img").attr("src") || "";
     
-    console.log(`\x1b[32m✅ Metadata loaded: ${title}\x1b[0m`);
     return {
       title,
       language,
@@ -225,7 +243,7 @@ async function getMovieMetadata(url) {
   }
 }
 
-// ---------- Pixeldrain Links ----------
+// Pixeldrain links function...
 async function getPixeldrainLinks(movieUrl) {
   console.log(`\x1b[34m🔗 Fetching download links...\x1b[0m`);
   try {
@@ -255,10 +273,8 @@ async function getPixeldrainLinks(movieUrl) {
     
     const links = [];
     
-    // Process only first 3 links to save time/memory
     for (const l of rows.slice(0, 3)) {
       try {
-        // Get the intermediate page
         const { data: pageData } = await axios.get(l.pageLink, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -270,13 +286,12 @@ async function getPixeldrainLinks(movieUrl) {
         const finalUrl = $$(".wait-done a[href^='https://pixeldrain.com/']").attr("href");
         
         if (finalUrl) {
-          // Calculate size (limit to 1.5GB)
           let sizeMB = 0;
           const sizeText = l.size.toUpperCase();
           if (sizeText.includes("GB")) sizeMB = parseFloat(sizeText) * 1024;
           else if (sizeText.includes("MB")) sizeMB = parseFloat(sizeText);
           
-          if (sizeMB <= 1536) { // 1.5GB limit
+          if (sizeMB <= 1536) {
             links.push({ 
               link: finalUrl, 
               quality: normalizeQuality(l.quality), 
@@ -297,7 +312,7 @@ async function getPixeldrainLinks(movieUrl) {
   }
 }
 
-/* ================= COMMAND: MOVIE SEARCH ================= */
+// ================= COMMAND: MOVIE SEARCH =================
 cmd({
   pattern: "movie",
   alias: ["sinhalasub","films","cinema"],
@@ -323,22 +338,19 @@ cmd({
   pendingSearch[sender] = { results: searchResults, timestamp: Date.now() };
 
   if (config.BUTTON) {
-    // -------- Single Select Menu --------
     const rows = searchResults.map((movie, i) => ({
       id: `${i+1}`,
       title: movie.title,
       description: `Language: ${movie.language} | Quality: ${movie.quality} | Format: ${movie.qty}`
     }));
 
-    const interactiveButtons = [
-      {
-        name: "single_select",
-        buttonParamsJson: JSON.stringify({
-          title: "Movie Search Results",
-          sections: [{ title: "Select a movie", rows }]
-        })
-      }
-    ];
+    const interactiveButtons = [{
+      name: "single_select",
+      buttonParamsJson: JSON.stringify({
+        title: "Movie Search Results",
+        sections: [{ title: "Select a movie", rows }]
+      })
+    }];
 
     const caption = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
 ║     🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁    ║          
@@ -352,21 +364,12 @@ cmd({
 ┃   ⚙️ M A D E  W I T H ❤️ B Y 
 ╰─🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥─╯
 
-─────────────────────────
-`;
+─────────────────────────`;
     
-    await danuwa.sendMessage(from, {
-      image: { url: imageUrl },
-    }, { quoted: mek });
-    
-    await sendInteractiveMessage(danuwa, from, {
-      text: caption,
-      interactiveButtons,
-      quoted: mek
-    });
+    await danuwa.sendMessage(from, { image: { url: imageUrl } }, { quoted: mek });
+    await sendInteractiveMessage(danuwa, from, { text: caption, interactiveButtons, quoted: mek });
 
   } else {
-    // -------- Plain Text Reply --------
     const numberEmojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
     let filmListMessage = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
 ║     🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁    ║          
@@ -410,24 +413,21 @@ cmd({
     }, { quoted: mek });
   }
   
-  // Keep monitoring for selection phase
   console.log('\x1b[33m⏳ Waiting for user selection...\x1b[0m');
 });
 
-/* ================= COMMAND: MOVIE SELECTION ================= */
+// ================= COMMAND: MOVIE SELECTION =================
 cmd({
   filter: (text, { sender }) => pendingSearch[sender] && !isNaN(text) && parseInt(text) > 0 && parseInt(text) <= pendingSearch[sender].results.length
 }, async (danuwa, mek, m, { body, sender, reply, from }) => {
 
-  await danuwa.sendMessage(from, {
-    react: { text: "✅", key: m.key }
-  });
+  await danuwa.sendMessage(from, { react: { text: "✅", key: m.key } });
   
   const index = parseInt(body) - 1;
   const selected = pendingSearch[sender].results[index];
   delete pendingSearch[sender];
 
-  console.log(`\x1b[34m🎬 User selected: ${selected.title}\x1b[0m`);
+  console.log(`\x1b[34m🎬 Selected: ${selected.title}\x1b[0m`);
   
   reply("*පොඩ්ඩක් ඉදහම් Film එකේ විස්තර ටික එවන්නම්...👀❤️‍🩹*");
   const metadata = await getMovieMetadata(selected.movieUrl);
@@ -461,7 +461,6 @@ cmd({
     await danuwa.sendMessage(from, { text: msg }, { quoted: mek });
   }
 
-  // -------- Quality Selection --------
   const downloadLinks = await getPixeldrainLinks(selected.movieUrl);
   if (!downloadLinks.length) {
     setTimeout(() => memoryMonitor.stop(), 1000);
@@ -471,11 +470,9 @@ cmd({
   pendingQuality[sender] = { movie: { metadata, downloadLinks }, timestamp: Date.now() };
 
   if (config.BUTTON) {
-    // Buttons mode
     const buttons = downloadLinks.map((d, i) => ({ id: `${i+1}`, text: `💡 ${d.quality} (${d.size})` }));
     await sendButtons(danuwa, from, { text: "─────────────────────────\n *📝CHOOSE MOVIE QUALITY❕👀*\n ─────────────────────────", buttons }, { quoted: mek });
   } else {
-    // Plain text mode
     let text = `─────────────────────────
 📝CHOOSE MOVIE QUALITY❕👀
 ─────────────────────────
@@ -490,14 +487,12 @@ cmd({
   console.log('\x1b[33m⏳ Waiting for quality selection...\x1b[0m');
 });
 
-/* ================= COMMAND: QUALITY SELECTION ================= */
+// ================= COMMAND: QUALITY SELECTION =================
 cmd({
   filter: (text, { sender }) => pendingQuality[sender] && !isNaN(text) && parseInt(text) > 0 && parseInt(text) <= pendingQuality[sender].movie.downloadLinks.length
 }, async (danuwa, mek, m, { body, sender, reply, from }) => {
 
-  await danuwa.sendMessage(from, {
-    react: { text: "✅", key: m.key }
-  });
+  await danuwa.sendMessage(from, { react: { text: "✅", key: m.key } });
   
   const index = parseInt(body) - 1;
   const { movie } = pendingQuality[sender];
@@ -512,9 +507,7 @@ cmd({
     const directUrl = getDirectPixeldrainUrl(selectedLink.link);
     
     console.log('\x1b[36m🚀 Starting movie download...\x1b[0m');
-    console.log(`\x1b[36m🔗 Download URL: ${directUrl}\x1b[0m`);
     
-    // Send document directly via URL (WhatsApp will download it)
     await danuwa.sendMessage(from, {
       document: { url: directUrl },
       mimetype: "video/mp4",
@@ -537,13 +530,12 @@ cmd({
       }
     }, { quoted: mek });
     
-    console.log('\x1b[32m✅ Movie download completed successfully!\x1b[0m');
+    console.log('\x1b[32m✅ Movie download completed!\x1b[0m');
     
   } catch (error) {
     console.error("\x1b[31m❌ Send document error:\x1b[0m", error);
     reply(`*❌ Failed to send movie:* ${error.message || "Unknown error"}`);
   } finally {
-    // Stop monitoring after 2 seconds
     setTimeout(() => {
       memoryMonitor.stop();
       console.log('\x1b[32m✨ Movie plugin operation completed!\x1b[0m');
@@ -551,16 +543,14 @@ cmd({
   }
 });
 
-/* ================= CLEANUP ================= */
+// ================= CLEANUP =================
 setInterval(() => {
   const now = Date.now();
   const timeout = 10*60*1000;
   for (const s in pendingSearch) if (now - pendingSearch[s].timestamp > timeout) delete pendingSearch[s];
   for (const s in pendingQuality) if (now - pendingQuality[s].timestamp > timeout) delete pendingQuality[s];
   
-  // Auto-stop monitoring if no active operations for 30 seconds
   if (memoryMonitor.isMonitoring && Object.keys(pendingSearch).length === 0 && Object.keys(pendingQuality).length === 0) {
-    console.log('\x1b[33m🔄 No active operations - stopping monitor in 30s...\x1b[0m');
     setTimeout(() => {
       if (Object.keys(pendingSearch).length === 0 && Object.keys(pendingQuality).length === 0) {
         memoryMonitor.stop();
