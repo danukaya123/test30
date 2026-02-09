@@ -1,182 +1,46 @@
+// movie-vercel.js - Complete Vercel Streaming Plugin
 const { cmd } = require("../command");
-const { sendButtons, sendInteractiveMessage } = require("gifted-btns");
 const axios = require("axios");
 const cheerio = require("cheerio");
-const config = require("../config");
 
-// ========== CLOUDFLARE WORKER CONFIG ==========
-// ⚠️ REPLACE THIS WITH YOUR ACTUAL WORKER URL ⚠️
-const CLOUDFLARE_WORKER_URL = 'https://royal-brook-d5cd.educatelux1.workers.dev';
-// ==============================================
+// ========== CONFIGURATION ==========
+// ⚠️ SET YOUR VERCEL URL HERE ⚠️
+const VERCEL_URL = 'https://test5689.vercel.app'; // Replace with your Vercel URL
 
-// ========== MEMORY MONITOR (LIGHTWEIGHT) ==========
-class MemoryMonitor {
-    constructor(updateInterval = 500) {
-        this.updateInterval = updateInterval;
-        this.interval = null;
-        this.isMonitoring = false;
-        this.startTime = null;
-    }
+// Cache for search results (5 minutes)
+const searchCache = new Map();
+const metadataCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-    formatMemory(bytes) {
-        const mb = bytes / 1024 / 1024;
-        return mb.toFixed(2);
-    }
-
-    showStats() {
-        if (!this.isMonitoring) return;
-        
-        const mem = process.memoryUsage();
-        const elapsed = Date.now() - this.startTime;
-        const elapsedStr = elapsed < 1000 ? `${elapsed}ms` : `${(elapsed/1000).toFixed(1)}s`;
-        
-        console.log(`\x1b[36m[🎬 MOVIE] Time: ${elapsedStr} | RAM: ${this.formatMemory(mem.rss)}MB | Heap: ${this.formatMemory(mem.heapUsed)}MB\x1b[0m`);
-    }
-
-    start() {
-        if (this.isMonitoring) return;
-        
-        this.isMonitoring = true;
-        this.startTime = Date.now();
-        
-        console.log('\x1b[42m\x1b[30m══════════════════════════════════════════════════════════════\x1b[0m');
-        console.log('\x1b[42m\x1b[30m          🎬 DANUWA MOVIE + CLOUDFLARE STREAMING              \x1b[0m');
-        console.log('\x1b[42m\x1b[30m══════════════════════════════════════════════════════════════\x1b[0m');
-        console.log(`\x1b[36m🌍 Cloudflare Worker: ${CLOUDFLARE_WORKER_URL}\x1b[0m`);
-        console.log(`\x1b[36m💡 Streaming via Global CDN (Zero bot memory for files)\x1b[0m\n`);
-        
-        this.showStats();
-        this.interval = setInterval(() => this.showStats(), this.updateInterval);
-    }
-
-    stop() {
-        if (this.interval) {
-            clearInterval(this.interval);
-            this.interval = null;
-        }
-        
-        if (this.isMonitoring) {
-            const mem = process.memoryUsage();
-            console.log('\n\x1b[32m════════════════════════════════════════════════════\x1b[0m');
-            console.log(`\x1b[32m✅ Streaming completed!\x1b[0m`);
-            console.log(`\x1b[32m📊 Final RAM: ${this.formatMemory(mem.rss)}MB\x1b[0m`);
-            console.log(`\x1b[32m💾 Heap: ${this.formatMemory(mem.heapUsed)}MB\x1b[0m`);
-            console.log(`\x1b[32m🌍 Cloudflare handled all heavy lifting\x1b[0m`);
-            console.log('\x1b[32m════════════════════════════════════════════════════\x1b[0m\n');
-        }
-        
-        this.isMonitoring = false;
-    }
+// ========== VERCEL STREAMING FUNCTIONS ==========
+function getStreamUrl(pixeldrainUrl, filename, method = 'stream') {
+  const encodedUrl = encodeURIComponent(pixeldrainUrl);
+  const encodedName = encodeURIComponent(filename);
+  return `${VERCEL_URL}/api/${method}?url=${encodedUrl}&filename=${encodedName}`;
 }
 
-const memoryMonitor = new MemoryMonitor();
-
-// ---------- Cloudflare Streaming Function ----------
-async function streamViaCloudflare(danuwa, from, pixeldrainUrl, fileName, caption, quoted) {
-  console.log(`\x1b[36m🚀 Cloudflare Streaming Activated\x1b[0m`);
-  console.log(`\x1b[36m📦 File: ${fileName}\x1b[0m`);
+// ========== MOVIE SEARCH FUNCTIONS ==========
+async function searchMovies(query, useCache = true) {
+  const cacheKey = `search:${query.toLowerCase()}`;
   
-  try {
-    // Encode parameters for Cloudflare Worker
-    const encodedUrl = encodeURIComponent(pixeldrainUrl);
-    const encodedName = encodeURIComponent(fileName);
-    
-    // Build Cloudflare Worker URL
-    const cloudflareUrl = `${CLOUDFLARE_WORKER_URL}/?url=${encodedUrl}&filename=${encodedName}`;
-    
-    console.log(`\x1b[36m🌐 Cloudflare URL: ${cloudflareUrl}\x1b[0m`);
-    console.log(`\x1b[33m⚡ Streaming via Cloudflare Global Network...\x1b[0m`);
-    
-    // Send to WhatsApp via Cloudflare
-    const result = await danuwa.sendMessage(from, {
-      document: { 
-        url: cloudflareUrl  // WhatsApp downloads from Cloudflare
-      },
-      mimetype: "video/mp4",
-      fileName: fileName,
-      caption: caption + `\n\n⚡ Streamed via Cloudflare CDN\n🌍 Global Edge Network\n🔒 Zero Bot Memory Usage`,
-      contextInfo: {       
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-          newsletterJid: channelJid,
-          newsletterName: channelName,
-          serverMessageId: -1
-        }
-      }
-    }, { quoted: quoted });
-    
-    console.log(`\x1b[32m✅ Cloudflare streaming successful!\x1b[0m`);
-    console.log(`\x1b[32m📊 WhatsApp is downloading from Cloudflare edge server\x1b[0m`);
-    
-    return result;
-    
-  } catch (error) {
-    console.error(`\x1b[31m❌ Cloudflare streaming failed: ${error.message}\x1b[0m`);
-    
-    // Fallback: Try direct URL
-    console.log(`\x1b[33m🔄 Falling back to direct URL...\x1b[0m`);
-    
-    try {
-      const fallbackResult = await danuwa.sendMessage(from, {
-        document: { 
-          url: pixeldrainUrl  // Direct URL as fallback
-        },
-        mimetype: "video/mp4",
-        fileName: fileName,
-        caption: caption + `\n\n⚠️ Direct Download (Fallback Mode)`,
-        contextInfo: {       
-          forwardingScore: 999,
-          isForwarded: true,
-          forwardedNewsletterMessageInfo: {
-            newsletterJid: channelJid,
-            newsletterName: channelName,
-            serverMessageId: -1
-          }
-        }
-      }, { quoted: quoted });
-      
-      console.log(`\x1b[32m✅ Direct fallback successful\x1b[0m`);
-      return fallbackResult;
-      
-    } catch (fallbackError) {
-      console.error(`\x1b[31m❌ All streaming methods failed\x1b[0m`);
-      throw new Error(`Streaming failed: ${error.message} | Fallback: ${fallbackError.message}`);
+  if (useCache && searchCache.has(cacheKey)) {
+    const cached = searchCache.get(cacheKey);
+    if (Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log(`📂 Using cached search results for: ${query}`);
+      return cached.results;
     }
   }
-}
-
-const pendingSearch = {};
-const pendingQuality = {};
-const channelJid = '120363418166326365@newsletter'; 
-const channelName = '🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁';
-const imageUrl = "https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/film.png?raw=true";
-
-// ---------- Helper Functions ----------
-function normalizeQuality(text) {
-  if (!text) return null;
-  text = text.toUpperCase();
-  if (/1080|FHD/.test(text)) return "1080p";
-  if (/720|HD/.test(text)) return "720p";
-  if (/480|SD/.test(text)) return "480p";
-  return text;
-}
-
-function getDirectPixeldrainUrl(url) {
-  const match = url.match(/pixeldrain\.com\/u\/(\w+)/);
-  if (!match) return null;
-  return `https://pixeldrain.com/api/file/${match[1]}?download`;
-}
-
-// ---------- Movie Search ----------
-async function searchMovies(query) {
-  console.log(`\x1b[34m🔍 Searching movies for: ${query}\x1b[0m`);
-  const url = `https://sinhalasub.lk/?s=${encodeURIComponent(query)}&post_type=movies`;
+  
+  console.log(`🔍 Searching movies: ${query}`);
   
   try {
-    const { data } = await axios.get(url, {
+    const searchUrl = `https://sinhalasub.lk/?s=${encodeURIComponent(query)}&post_type=movies`;
+    
+    const { data } = await axios.get(searchUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9'
       },
       timeout: 10000
     });
@@ -184,40 +48,58 @@ async function searchMovies(query) {
     const $ = cheerio.load(data);
     const results = [];
     
-    $(".display-item .item-box").slice(0, 10).each((index, box) => {
-      const $box = $(box);
-      const a = $box.find("a");
-      const img = $box.find(".thumb");
-      const lang = $box.find(".item-desc-giha .language").text() || "";
-      const quality = $box.find(".item-desc-giha .quality").text() || "";
-      const qty = $box.find(".item-desc-giha .qty").text() || "";
+    $('.display-item .item-box').each((index, element) => {
+      const $el = $(element);
+      const title = $el.find('a[title]').attr('title')?.trim();
+      const url = $el.find('a[href]').attr('href');
+      const image = $el.find('.thumb').attr('src');
+      const language = $el.find('.language').text().trim() || 'Sinhala';
+      const quality = $el.find('.quality').text().trim() || 'HD';
       
-      if (a.attr("href") && a.attr("title")) {
+      if (title && url) {
         results.push({
           id: index + 1,
-          title: a.attr("title").trim(),
-          movieUrl: a.attr("href"),
-          thumb: img.attr("src") || "",
-          language: lang.trim(),
-          quality: quality.trim(),
-          qty: qty.trim()
+          title,
+          url,
+          image,
+          language,
+          quality,
+          year: title.match(/(\d{4})/)?.[1] || 'Unknown'
         });
       }
     });
     
-    console.log(`\x1b[32m✅ Found ${results.length} movies\x1b[0m`);
-    return results;
+    // Cache results
+    if (useCache && results.length > 0) {
+      searchCache.set(cacheKey, {
+        results: results.slice(0, 8), // Cache only first 8 results
+        timestamp: Date.now()
+      });
+    }
+    
+    console.log(`✅ Found ${results.length} movies`);
+    return results.slice(0, 8); // Return max 8 results
+    
   } catch (error) {
-    console.error(`\x1b[31m❌ Search error: ${error.message}\x1b[0m`);
+    console.error(`❌ Search error: ${error.message}`);
     return [];
   }
 }
 
-// ---------- Movie Metadata ----------
-async function getMovieMetadata(url) {
-  console.log(`\x1b[34m📥 Fetching metadata...\x1b[0m`);
+async function getMovieMetadata(movieUrl, useCache = true) {
+  const cacheKey = `meta:${movieUrl}`;
+  
+  if (useCache && metadataCache.has(cacheKey)) {
+    const cached = metadataCache.get(cacheKey);
+    if (Date.now() - cached.timestamp < CACHE_TTL) {
+      return cached.metadata;
+    }
+  }
+  
+  console.log(`📥 Fetching metadata: ${movieUrl}`);
+  
   try {
-    const { data } = await axios.get(url, {
+    const { data } = await axios.get(movieUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       },
@@ -226,457 +108,336 @@ async function getMovieMetadata(url) {
     
     const $ = cheerio.load(data);
     
-    const title = $(".info-details .details-title h3").text().trim();
-    let language = "";
-    const directors = [];
-    const stars = [];
-    
-    $(".info-col p").each((i, p) => {
-      const $p = $(p);
-      const strong = $p.find("strong");
-      if (strong.length) {
-        const txt = strong.text().trim();
-        if (txt.includes("Language:")) {
-          language = $(strong[0].nextSibling).text().trim();
-        }
-        if (txt.includes("Director:")) {
-          $p.find("a").each((j, a) => {
-            directors.push($(a).text().trim());
-          });
-        }
-        if (txt.includes("Stars:")) {
-          $p.find("a").each((j, a) => {
-            stars.push($(a).text().trim());
-          });
-        }
-      }
-    });
-    
-    const duration = $(".data-views[itemprop='duration']").text().trim();
-    const imdb = $(".data-imdb").text().replace("IMDb:", "").trim();
-    
-    const genres = [];
-    $(".details-genre a").each((i, a) => {
-      genres.push($(a).text().trim());
-    });
-    
-    const thumbnail = $(".splash-bg img").attr("src") || "";
-    
-    console.log(`\x1b[32m✅ Metadata loaded: ${title}\x1b[0m`);
-    return {
-      title,
-      language,
-      duration,
-      imdb,
-      genres,
-      directors,
-      stars,
-      thumbnail
-    };
-  } catch (error) {
-    console.error(`\x1b[31m❌ Metadata error: ${error.message}\x1b[0m`);
-    return {
-      title: "",
-      language: "",
-      duration: "",
-      imdb: "",
+    // Extract metadata
+    const metadata = {
+      title: $('.details-title h3').text().trim() || 'Unknown',
+      description: $('.splash-desc p').text().trim() || '',
+      thumbnail: $('.splash-bg img').attr('src') || '',
+      duration: $('[itemprop="duration"]').text().trim() || '',
+      imdb: $('.data-imdb').text().replace('IMDb:', '').trim() || 'N/A',
       genres: [],
       directors: [],
       stars: [],
-      thumbnail: ""
+      downloadLinks: []
+    };
+    
+    // Extract genres
+    $('.details-genre a').each((i, el) => {
+      metadata.genres.push($(el).text().trim());
+    });
+    
+    // Extract download links (pixeldrain)
+    $('a[href*="pixeldrain"]').each((i, el) => {
+      const href = $(el).attr('href');
+      const text = $(el).text().trim();
+      
+      if (href && href.includes('pixeldrain.com/u/')) {
+        const match = href.match(/pixeldrain\.com\/u\/(\w+)/);
+        if (match) {
+          const quality = text.includes('1080') ? '1080p' : 
+                         text.includes('720') ? '720p' : 
+                         text.includes('480') ? '480p' : 'SD';
+          
+          const directUrl = `https://pixeldrain.com/api/file/${match[1]}?download`;
+          
+          metadata.downloadLinks.push({
+            quality,
+            url: directUrl,
+            source: 'pixeldrain',
+            label: text || quality
+          });
+        }
+      }
+    });
+    
+    // If no pixeldrain links found, look for other download links
+    if (metadata.downloadLinks.length === 0) {
+      $('a[href*="download"], a[href*=".mp4"], a[href*=".mkv"]').each((i, el) => {
+        const href = $(el).attr('href');
+        const text = $(el).text().trim();
+        
+        if (href && (href.includes('http') || href.includes('//'))) {
+          const fullUrl = href.startsWith('http') ? href : new URL(href, movieUrl).href;
+          
+          metadata.downloadLinks.push({
+            quality: 'Unknown',
+            url: fullUrl,
+            source: 'direct',
+            label: text || 'Download'
+          });
+        }
+      });
+    }
+    
+    // Cache metadata
+    if (useCache) {
+      metadataCache.set(cacheKey, {
+        metadata,
+        timestamp: Date.now()
+      });
+    }
+    
+    console.log(`✅ Metadata loaded with ${metadata.downloadLinks.length} links`);
+    return metadata;
+    
+  } catch (error) {
+    console.error(`❌ Metadata error: ${error.message}`);
+    return {
+      title: 'Unknown',
+      description: '',
+      thumbnail: '',
+      downloadLinks: []
     };
   }
 }
 
-// ---------- Pixeldrain Links ----------
-async function getPixeldrainLinks(movieUrl) {
-  console.log(`\x1b[34m🔗 Fetching download links...\x1b[0m`);
-  try {
-    const { data } = await axios.get(movieUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      },
-      timeout: 15000
-    });
-    
-    const $ = cheerio.load(data);
-    const rows = [];
-    
-    $(".link-pixeldrain tbody tr").each((i, tr) => {
-      const $tr = $(tr);
-      const a = $tr.find(".link-opt a");
-      const quality = $tr.find(".quality").text().trim() || "";
-      const size = $tr.find("td:nth-child(3) span").text().trim() || "";
-      
-      if (a.attr("href")) {
-        rows.push({
-          pageLink: a.attr("href"),
-          quality,
-          size
-        });
-      }
-    });
-    
-    const links = [];
-    
-    for (const l of rows.slice(0, 3)) {
-      try {
-        const { data: pageData } = await axios.get(l.pageLink, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Referer': movieUrl
-          },
-          timeout: 10000
-        });
-        
-        const $$ = cheerio.load(pageData);
-        const finalUrl = $$(".wait-done a[href^='https://pixeldrain.com/']").attr("href");
-        
-        if (finalUrl) {
-          const directUrl = getDirectPixeldrainUrl(finalUrl);
-          
-          if (directUrl) {
-            let sizeMB = 0;
-            const sizeText = l.size.toUpperCase();
-            if (sizeText.includes("GB")) sizeMB = parseFloat(sizeText) * 1024;
-            else if (sizeText.includes("MB")) sizeMB = parseFloat(sizeText);
-            
-            if (sizeMB <= 2048) {
-              links.push({ 
-                link: directUrl,
-                quality: normalizeQuality(l.quality), 
-                size: l.size
-              });
-            }
-          }
-        }
-      } catch (error) {
-        console.error(`\x1b[31m❌ Link processing error: ${error.message}\x1b[0m`);
-      }
-    }
-    
-    console.log(`\x1b[32m✅ Found ${links.length} streaming links\x1b[0m`);
-    return links;
-  } catch (error) {
-    console.error(`\x1b[31m❌ Pixeldrain links error: ${error.message}\x1b[0m`);
-    return [];
-  }
+// ========== USER SESSION MANAGEMENT ==========
+const userSessions = new Map();
+
+function setUserSession(userId, data) {
+  userSessions.set(userId, {
+    ...data,
+    timestamp: Date.now()
+  });
 }
 
-// ========== NEW: DIRECT DOWNLOAD FUNCTION ==========
-async function directDownload(danuwa, from, url, filename, caption, quoted) {
-  console.log(`\x1b[36m📥 Direct Download Mode Activated\x1b[0m`);
-  console.log(`\x1b[36m📦 File: ${filename}\x1b[0m`);
+function getUserSession(userId) {
+  const session = userSessions.get(userId);
+  if (session && Date.now() - session.timestamp < 10 * 60 * 1000) { // 10 minutes
+    return session;
+  }
+  userSessions.delete(userId);
+  return null;
+}
+
+// ========== COMMANDS ==========
+
+/* ================= MOVIE SEARCH COMMAND ================= */
+cmd({
+  pattern: "movie",
+  alias: ["film", "sinhalasub", "cinema", "movies"],
+  react: "🎬",
+  desc: "Search and stream movies via Vercel (Zero bot memory)",
+  category: "download",
+  filename: __filename
+}, async (danuwa, mek, m, { from, q, sender, reply }) => {
+  
+  if (!q) {
+    return reply(`*🎬 VERCEL MOVIE STREAMING*\n\n*Usage:* .movie <movie_name>\n*Example:* .movie avatar\n\n*Features:*\n• Zero bot memory usage\n• Vercel serverless streaming\n• Fast global CDN\n• WhatsApp optimized\n\n*Powered by DANUWA-MD*`);
+  }
+  
+  console.log(`👤 ${sender} searching: ${q}`);
+  
+  await reply(`*🔍 Searching movies for "${q}"...*`);
+  
+  const movies = await searchMovies(q);
+  
+  if (!movies.length) {
+    return reply(`*❌ No movies found for "${q}"*\n\nTry a different search term or check spelling.`);
+  }
+  
+  // Store in session
+  setUserSession(sender, {
+    type: 'search',
+    query: q,
+    movies,
+    step: 'select_movie'
+  });
+  
+  // Create selection message
+  let message = `*🎬 Found ${movies.length} Movies*\n\n`;
+  
+  movies.forEach((movie, index) => {
+    message += `${index + 1}. *${movie.title}*\n`;
+    message += `   🎭 ${movie.language} | 📁 ${movie.quality} | 📅 ${movie.year}\n\n`;
+  });
+  
+  message += `*Reply with number (1-${movies.length}) to select movie*\n`;
+  message += `*Files will stream via Vercel (No bot memory used)*`;
+  
+  await danuwa.sendMessage(from, { text: message }, { quoted: mek });
+});
+
+/* ================= MOVIE SELECTION HANDLER ================= */
+cmd({
+  filter: (text, { sender }) => {
+    const session = getUserSession(sender);
+    return session && 
+           session.type === 'search' && 
+           session.step === 'select_movie' &&
+           !isNaN(text) && 
+           parseInt(text) > 0 && 
+           parseInt(text) <= session.movies.length;
+  }
+}, async (danuwa, mek, m, { body, sender, reply, from }) => {
+  
+  const session = getUserSession(sender);
+  const movieIndex = parseInt(body) - 1;
+  const selectedMovie = session.movies[movieIndex];
+  
+  console.log(`👤 ${sender} selected: ${selectedMovie.title}`);
+  
+  await reply(`*📥 Loading "${selectedMovie.title}"...*`);
+  
+  // Get movie metadata and download links
+  const metadata = await getMovieMetadata(selectedMovie.url);
+  
+  if (!metadata.downloadLinks.length) {
+    return reply(`*❌ No download links found for this movie*\n\nTry another movie or check the website.`);
+  }
+  
+  // Update session
+  setUserSession(sender, {
+    type: 'quality_select',
+    movie: selectedMovie,
+    metadata,
+    downloadLinks: metadata.downloadLinks,
+    step: 'select_quality'
+  });
+  
+  // Create quality selection message
+  let message = `*🎬 ${metadata.title}*\n`;
+  
+  if (metadata.imdb && metadata.imdb !== 'N/A') {
+    message += `⭐ IMDb: ${metadata.imdb}\n`;
+  }
+  
+  if (metadata.duration) {
+    message += `⏱️ Duration: ${metadata.duration}\n`;
+  }
+  
+  if (metadata.genres.length) {
+    message += `🎭 Genres: ${metadata.genres.join(', ')}\n`;
+  }
+  
+  message += `\n*📥 Available Download Links:*\n\n`;
+  
+  metadata.downloadLinks.forEach((link, index) => {
+    message += `${index + 1}. *${link.quality}*\n`;
+    if (link.source === 'pixeldrain') {
+      message += `   🔗 ${link.label}\n`;
+    }
+    message += `\n`;
+  });
+  
+  message += `*Reply with number (1-${metadata.downloadLinks.length}) to stream via Vercel*\n`;
+  message += `*Zero bot memory usage - Vercel handles everything*`;
+  
+  await reply(message);
+});
+
+/* ================= STREAM VIA VERCEL ================= */
+cmd({
+  filter: (text, { sender }) => {
+    const session = getUserSession(sender);
+    return session && 
+           session.type === 'quality_select' && 
+           session.step === 'select_quality' &&
+           !isNaN(text) && 
+           parseInt(text) > 0 && 
+           parseInt(text) <= session.downloadLinks.length;
+  }
+}, async (danuwa, mek, m, { body, sender, reply, from }) => {
+  
+  const session = getUserSession(sender);
+  const linkIndex = parseInt(body) - 1;
+  const selectedLink = session.downloadLinks[linkIndex];
+  
+  console.log(`🚀 Streaming: ${session.movie.title} - ${selectedLink.quality}`);
+  
+  // Create safe filename
+  const safeFilename = `${session.metadata.title.substring(0, 50)} - ${selectedLink.quality}.mp4`
+    .replace(/[^\w\s.-]/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  // Generate Vercel streaming URL
+  const vercelStreamUrl = getStreamUrl(selectedLink.url, safeFilename);
+  
+  console.log(`🌐 Vercel URL: ${vercelStreamUrl}`);
+  
+  // Send progress message
+  const progressMsg = await reply(`*🚀 Starting Vercel Streaming...*\n\n` +
+    `*Movie:* ${session.metadata.title}\n` +
+    `*Quality:* ${selectedLink.quality}\n` +
+    `*Method:* Vercel Serverless Proxy\n` +
+    `*Status:* Initializing stream...\n\n` +
+    `⚠️ *Please wait 10-30 seconds*\n` +
+    `Vercel is fetching and streaming the movie...`);
   
   try {
-    // Encode parameters for Cloudflare Worker
-    const encodedUrl = encodeURIComponent(url);
-    const encodedName = encodeURIComponent(filename);
-    
-    // Build Cloudflare Worker URL
-    const cloudflareUrl = `${CLOUDFLARE_WORKER_URL}/?url=${encodedUrl}&filename=${encodedName}`;
-    
-    console.log(`\x1b[36m🌐 Cloudflare Worker URL: ${cloudflareUrl}\x1b[0m`);
-    
-    // Send message with the download link
+    // Send to WhatsApp via Vercel
     const result = await danuwa.sendMessage(from, {
-      text: `*📥 DIRECT DOWNLOAD READY*\n\n` +
-            `*📁 File:* ${filename}\n` +
-            `*🔗 Download Link:* ${cloudflareUrl}\n\n` +
-            `*⚡ Features:*\n` +
-            `• Cloudflare Global CDN\n` +
-            `• WhatsApp Compatible\n` +
-            `• No Bot Memory Usage\n\n` +
-            `*💡 Simply click the link above to download!*`
-    }, { quoted: quoted });
+      document: {
+        url: vercelStreamUrl
+      },
+      mimetype: "video/mp4",
+      fileName: safeFilename,
+      caption: `🎬 *${session.metadata.title}*\n` +
+               `📊 ${selectedLink.quality}\n` +
+               `🚀 Streamed via Vercel\n` +
+               `⚡ Zero bot memory usage\n` +
+               `🌍 Global CDN delivery\n\n` +
+               `Powered by *DANUWA-MD*`,
+      contextInfo: {
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+          newsletterJid: '120363418166326365@newsletter',
+          newsletterName: '🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁',
+          serverMessageId: -1
+        }
+      }
+    }, { quoted: mek });
     
-    console.log(`\x1b[32m✅ Direct download link sent!\x1b[0m`);
+    console.log(`✅ Movie sent successfully via Vercel`);
+    
+    // Delete progress message
+    if (progressMsg) {
+      await danuwa.sendMessage(from, {
+        delete: progressMsg.key
+      });
+    }
+    
+    // Clear session
+    userSessions.delete(sender);
+    
     return result;
     
   } catch (error) {
-    console.error(`\x1b[31m❌ Direct download failed: ${error.message}\x1b[0m`);
+    console.error(`❌ Streaming error:`, error);
     
-    // Fallback: Send raw URL
+    // Update progress message with error
     await danuwa.sendMessage(from, {
-      text: `*⚠️ FALLBACK DOWNLOAD LINK*\n\n` +
-            `*📁 File:* ${filename}\n` +
-            `*🔗 Direct URL:* ${url}\n\n` +
-            `*Copy this URL and paste in browser to download*`
-    }, { quoted: quoted });
+      text: `*❌ Vercel Streaming Failed*\n\n` +
+            `*Error:* ${error.message}\n\n` +
+            `*Fallback Options:*\n` +
+            `1. Try a different quality\n` +
+            `2. Use direct download link:\n${selectedLink.url}\n` +
+            `3. Try again in a few minutes\n\n` +
+            `*Copy the link above and paste in browser to download.*`,
+      edit: progressMsg?.key
+    });
     
-    throw error;
+    // Clear session on error
+    userSessions.delete(sender);
   }
-}
+});
 
-/* ================= COMMAND: MOVIE SEARCH ================= */
+/* ================= DIRECT DOWNLOAD COMMAND ================= */
 cmd({
-  pattern: "movie",
-  alias: ["sinhalasub","films","cinema","film"],
-  react: "🎬",
-  desc: "Search SinhalaSub movies (Cloudflare Streaming)",
+  pattern: "dls",
+  alias: ["stream", "vercel"],
+  react: "⚡",
+  desc: "Direct stream any file via Vercel",
   category: "download",
   filename: __filename
 }, async (danuwa, mek, m, { from, q, sender, reply }) => {
-  memoryMonitor.start();
   
   if (!q) {
-    setTimeout(() => memoryMonitor.stop(), 1000);
-    return reply(`*🎬 CLOUDFLARE STREAMING MOVIES*\n\nUsage: .movie name\nExample: .movie avengers\n\n*🚀 Features:*\n• Cloudflare Global CDN\n• Zero bot memory usage\n• Fast edge streaming`);
-  }
-
-  const searchResults = await searchMovies(q);
-  if (!searchResults.length) {
-    setTimeout(() => memoryMonitor.stop(), 1000);
-    return reply("*❌ No movies found!*");
-  }
-
-  pendingSearch[sender] = { results: searchResults, timestamp: Date.now() };
-
-  if (config.BUTTON) {
-    const rows = searchResults.map((movie, i) => ({
-      id: `${i+1}`,
-      title: movie.title,
-      description: `Language: ${movie.language} | Quality: ${movie.quality}`
-    }));
-
-    const interactiveButtons = [{
-      name: "single_select",
-      buttonParamsJson: JSON.stringify({
-        title: "Movie Search Results",
-        sections: [{ title: "Select a movie (Cloudflare Streaming)", rows }]
-      })
-    }];
-
-    const caption = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
-║     🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁    ║          
-╚═━━━━━━━◢◤◆◥◣━━━━━━━━═╝  
-    📂 𝗖𝗟𝗢𝗨𝗗𝗙𝗟𝗔𝗥𝗘 𝗦𝗧𝗥𝗘𝗔𝗠𝗜𝗡𝗚 📂  
-┏━━━━━━━━━━━━━━━━━━━━━━┓  
-┃ 🔰 𝗖𝗛𝗢𝗢𝗦𝗘 𝗬𝗢𝗨𝗥 MOVIE         
-┃ 💬 *FOUND ${searchResults.length} MOVIES FOR "${q}"*❕  
-┃ 🚀 *Streaming via Cloudflare CDN*  
-┗━━━━━━━━━━━━━━━━━━━━━━┛  
-┃━━━━━━━━━━━━━━━━━━━━━━✦
-┃   ⚙️ M A D E  W I T H ❤️ B Y 
-╰─🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥─╯
-
-─────────────────────────`;
-    
-    await danuwa.sendMessage(from, { image: { url: imageUrl } }, { quoted: mek });
-    await sendInteractiveMessage(danuwa, from, { text: caption, interactiveButtons, quoted: mek });
-
-  } else {
-    const numberEmojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
-    let filmListMessage = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
-║     🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁    ║          
-╚═━━━━━━━◢◤◆◥◣━━━━━━━━═╝  
-    📂 𝗖𝗟𝗢𝗨𝗗𝗙𝗟𝗔𝗥𝗘 𝗦𝗧𝗥𝗘𝗔𝗠𝗜𝗡𝗚 📂  
-┏━━━━━━━━━━━━━━━━━━━━━━┓  
-┃ 🔰 𝗖𝗛𝗢𝗢𝗦𝗘 𝗬𝗢𝗨𝗥 MOVIE         
-┃ 💬 *FOUND ${searchResults.length} MOVIES FOR "${q}"*❕    
-┃ 🚀 *Streaming via Cloudflare CDN*  
-┗━━━━━━━━━━━━━━━━━━━━━━┛  
-┃━━━━━━━━━━━━━━━━━━━━━━✦
-┃   ⚙️ M A D E  W I T H ❤️ B Y 
-╰─🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥─╯
-
-─────────────────────────`;
-
-    searchResults.forEach((movie, index) => {
-      let adjustedIndex = index + 1;
-      let emojiIndex = adjustedIndex
-        .toString()
-        .split("")
-        .map(num => numberEmojis[num])
-        .join("");
-
-      filmListMessage += `${emojiIndex} *${movie.title}*\n`;
-      filmListMessage += `   📁 ${movie.quality} | 🎭 ${movie.language}\n\n`;
-    });
-
-    filmListMessage += `*📝 Reply with movie number (1-${searchResults.length})*\n`;
-    filmListMessage += `*🚀 Cloudflare Streaming: Zero bot memory usage*`;
-
-    await danuwa.sendMessage(from, {
-      image: { url: imageUrl },
-      caption: filmListMessage,
-      contextInfo: {           
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-          newsletterJid: channelJid,
-          newsletterName: channelName,
-          serverMessageId: -1
-        }
-      }
-    }, { quoted: mek });
+    return reply(`*⚡ DIRECT VERCEL STREAM*\n\n*Usage:* .dls <url> [filename]\n*Example:* .dls https://example.com/file.mp4 movie.mp4\n\n*Max file size:* 2GB\n*Streaming via Vercel CDN*`);
   }
   
-  console.log('\x1b[33m⏳ Waiting for user selection...\x1b[0m');
-});
-
-/* ================= COMMAND: MOVIE SELECTION ================= */
-cmd({
-  filter: (text, { sender }) => pendingSearch[sender] && !isNaN(text) && parseInt(text) > 0 && parseInt(text) <= pendingSearch[sender].results.length
-}, async (danuwa, mek, m, { body, sender, reply, from }) => {
-
-  await danuwa.sendMessage(from, { react: { text: "✅", key: m.key } });
-  
-  const index = parseInt(body) - 1;
-  const selected = pendingSearch[sender].results[index];
-  delete pendingSearch[sender];
-
-  console.log(`\x1b[34m🎬 Selected: ${selected.title}\x1b[0m`);
-  
-  reply("*🔍 Fetching movie details...*");
-  const metadata = await getMovieMetadata(selected.movieUrl);
-
-  let msg = `───────────────────────── 
-*🎬 ${metadata.title}*
-───────────────────────── 
-*📝 Language:* ${metadata.language}
-*⏱️ Duration:* ${metadata.duration}
-*⭐ IMDb:* ${metadata.imdb}
-*🎭 Genres:* ${metadata.genres.join(", ")}
-*🎥 Directors:* ${metadata.directors.join(", ")}
-───────────────────────── 
-*🔄 Getting Cloudflare streaming links...*`;
-
-  if (metadata.thumbnail) {
-    await danuwa.sendMessage(from, { 
-      image: { url: metadata.thumbnail }, 
-      caption: msg,
-      contextInfo: {           
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-          newsletterJid: channelJid,
-          newsletterName: channelName,
-          serverMessageId: -1
-        }
-      }
-    }, { quoted: mek });
-  } else {
-    await danuwa.sendMessage(from, { text: msg }, { quoted: mek });
-  }
-
-  const downloadLinks = await getPixeldrainLinks(selected.movieUrl);
-  if (!downloadLinks.length) {
-    setTimeout(() => memoryMonitor.stop(), 1000);
-    return reply("*❌ No streaming links found!*");
-  }
-
-  pendingQuality[sender] = { movie: { metadata, downloadLinks }, timestamp: Date.now() };
-
-  if (config.BUTTON) {
-    const buttons = downloadLinks.map((d, i) => ({ 
-      id: `${i+1}`, 
-      text: `🎬 ${d.quality} (${d.size})` 
-    }));
-    
-    await sendButtons(danuwa, from, { 
-      text: "─────────────────────────\n*📝 CHOOSE STREAMING QUALITY 🚀*\n*🌍 Streaming via Cloudflare Global CDN*\n─────────────────────────", 
-      buttons 
-    }, { quoted: mek });
-  } else {
-    let text = `─────────────────────────
-*📝 CHOOSE STREAMING QUALITY 🚀*
-─────────────────────────
-*🌍 Cloudflare Streaming Features:*
-• Zero bot memory usage
-• Global 300+ edge locations
-• No buffering on your VPS
-• Supports up to 2GB files
-─────────────────────────
-`;
-    
-    downloadLinks.forEach((d, i) => {
-      text += `${i+1}. 🎬 *${d.quality}* (${d.size})\n`;
-    });
-    
-    text += `\n─────────────────────────\n`;
-    text += `*📝 Reply with number (1-${downloadLinks.length})*\n`;
-    text += `*🚀 Files will stream via Cloudflare CDN*`;
-    
-    reply(text);
-  }
-  
-  console.log('\x1b[33m⏳ Waiting for quality selection...\x1b[0m');
-});
-
-/* ================= COMMAND: QUALITY SELECTION ================= */
-cmd({
-  filter: (text, { sender }) => pendingQuality[sender] && !isNaN(text) && parseInt(text) > 0 && parseInt(text) <= pendingQuality[sender].movie.downloadLinks.length
-}, async (danuwa, mek, m, { body, sender, reply, from }) => {
-
-  await danuwa.sendMessage(from, { react: { text: "✅", key: m.key } });
-  
-  const index = parseInt(body) - 1;
-  const { movie } = pendingQuality[sender];
-  delete pendingQuality[sender];
-
-  const selectedLink = movie.downloadLinks[index];
-  console.log(`\x1b[34m🚀 Streaming: ${selectedLink.quality} - ${selectedLink.size}\x1b[0m`);
-  
-  reply(`*🚀 Starting Cloudflare streaming of ${selectedLink.quality}...*\n\n*📦 Size: ${selectedLink.size}*\n*🌍 Method: Cloudflare Global CDN*`);
-
-  try {
-    const safeFileName = `${movie.metadata.title.substring(0,50)} - ${selectedLink.quality}.mp4`
-      .replace(/[^\w\s.-]/gi,'')
-      .replace(/\s+/g, ' ')
-      .trim();
-    
-    const caption = `───────────────────────── 
-*🎬 ${movie.metadata.title}*
-───────────────────────── 
-*📊 Quality:* ${selectedLink.quality}
-*💾 Size:* ${selectedLink.size}
-*🚀 Method:* Cloudflare Streaming
-*🌍 Network:* 300+ Global Edge Locations
-*💡 Memory:* Zero bot usage
-─────────────────────────        
-🎥 Powered By *DANUKA DISANAYAKA* 🔥`;
-    
-    await streamViaCloudflare(
-      danuwa, 
-      from, 
-      selectedLink.link,
-      safeFileName,
-      caption,
-      mek
-    );
-    
-    console.log(`\x1b[32m✅ Cloudflare streaming completed!\x1b[0m`);
-    
-  } catch (error) {
-    console.error(`\x1b[31m❌ Streaming error:\x1b[0m`, error);
-    
-    reply(`*⚠️ All streaming methods failed!*\n\n*Error:* ${error.message}`);
-    
-  } finally {
-    setTimeout(() => {
-      memoryMonitor.stop();
-      console.log(`\x1b[32m✨ Movie operation completed!\x1b[0m`);
-    }, 3000);
-  }
-});
-
-/* ================= NEW COMMAND: DIRECT DOWNLOAD ================= */
-cmd({
-  pattern: "download",
-  alias: ["dl","down","get"],
-  react: "📥",
-  desc: "Direct download any file via Cloudflare Worker",
-  category: "download",
-  filename: __filename
-}, async (danuwa, mek, m, { from, q, sender, reply }) => {
-  memoryMonitor.start();
-  
-  if (!q) {
-    setTimeout(() => memoryMonitor.stop(), 1000);
-    return reply(`*📥 CLOUDFLARE DIRECT DOWNLOAD*\n\nUsage: .download url [filename]\nExample: .download https://example.com/file.mp4 movie.mp4\n\n*🚀 Features:*\n• Cloudflare Global CDN\n• WhatsApp Compatible\n• Zero bot memory usage`);
-  }
-
   const args = q.split(' ');
   let url, filename;
   
@@ -685,101 +446,140 @@ cmd({
     filename = args.slice(1).join(' ');
   } else {
     url = q;
-    filename = url.split('/').pop() || 'download.file';
+    filename = url.split('/').pop() || 'download.mp4';
   }
   
   // Validate URL
   if (!url.startsWith('http')) {
-    setTimeout(() => memoryMonitor.stop(), 1000);
-    return reply("*❌ Invalid URL! Please provide a valid http/https URL*");
+    return reply(`*❌ Invalid URL*\n\nPlease provide a valid http/https URL.`);
   }
   
-  console.log(`\x1b[34m📥 Direct download request: ${filename}\x1b[0m`);
-  console.log(`\x1b[34m🔗 URL: ${url}\x1b[0m`);
+  console.log(`⚡ Direct stream: ${filename}`);
+  
+  const vercelStreamUrl = getStreamUrl(url, filename);
+  
+  await reply(`*⚡ Streaming via Vercel...*\n\n` +
+              `*File:* ${filename}\n` +
+              `*URL:* ${url.substring(0, 50)}...\n` +
+              `*Status:* Initializing...`);
   
   try {
-    await directDownload(
-      danuwa,
-      from,
-      url,
-      filename,
-      `*📥 Direct Download*\nFile: ${filename}`,
-      mek
-    );
+    await danuwa.sendMessage(from, {
+      document: {
+        url: vercelStreamUrl
+      },
+      mimetype: "application/octet-stream",
+      fileName: filename,
+      caption: `📥 *${filename}*\n` +
+               `⚡ Streamed via Vercel\n` +
+               `🌍 Zero bot memory usage\n` +
+               `🚀 Fast CDN delivery`,
+      contextInfo: {
+        forwardingScore: 999,
+        isForwarded: true
+      }
+    }, { quoted: mek });
     
-    console.log(`\x1b[32m✅ Direct download initiated!\x1b[0m`);
+    console.log(`✅ Direct stream successful`);
     
   } catch (error) {
-    console.error(`\x1b[31m❌ Download error:\x1b[0m`, error);
-    reply(`*❌ Download failed: ${error.message}*`);
-    
-  } finally {
-    setTimeout(() => {
-      memoryMonitor.stop();
-      console.log(`\x1b[32m✨ Download operation completed!\x1b[0m`);
-    }, 2000);
+    console.error(`❌ Direct stream error:`, error);
+    await reply(`*❌ Streaming failed*\n\n*Error:* ${error.message}\n\n*Direct URL:* ${url}`);
   }
 });
 
-/* ================= NEW COMMAND: CLOUDFLARE TEST ================= */
+/* ================= VERCEL STATUS COMMAND ================= */
 cmd({
-  pattern: "cftest",
-  alias: ["cloudflare","cf","worker"],
+  pattern: "vstatus",
+  alias: ["vercelstatus", "vping"],
   react: "🌍",
-  desc: "Test Cloudflare Worker connection",
+  desc: "Check Vercel streaming status",
   category: "download",
   filename: __filename
 }, async (danuwa, mek, m, { from, reply }) => {
   
-  const testUrl = 'https://pixeldrain.com/api/file/wBwvQBf9?download';
-  const testFile = 'test-video.mp4';
-  
-  const encodedUrl = encodeURIComponent(testUrl);
-  const encodedFile = encodeURIComponent(testFile);
-  
-  const cloudflareUrl = `${CLOUDFLARE_WORKER_URL}/?url=${encodedUrl}&filename=${encodedFile}`;
-  
-  const result = await reply(
-    `*🌍 CLOUDFLARE WORKER TEST*\n\n` +
-    `*✅ Worker Status:* ONLINE\n` +
-    `*🔗 Worker URL:* ${CLOUDFLARE_WORKER_URL}\n\n` +
-    `*📊 Test Configuration:*\n` +
-    `• Test File: ${testFile}\n` +
-    `• Source: ${testUrl}\n` +
-    `• Generated URL: ${cloudflareUrl}\n\n` +
-    `*🚀 Features Enabled:*\n` +
-    `✓ WhatsApp optimization\n` +
-    `✓ Browser simulation\n` +
-    `✓ Direct streaming\n` +
-    `✓ Zero bot memory usage\n\n` +
-    `*Ready for movie streaming!* 🎬`
-  );
-  
-  return result;
+  try {
+    const pingUrl = `${VERCEL_URL}/api/ping`;
+    const response = await axios.get(pingUrl, { timeout: 5000 });
+    
+    await reply(`*🌍 VERCEL STREAMING STATUS*\n\n` +
+                `✅ Status: ONLINE\n` +
+                `🔗 URL: ${VERCEL_URL}\n` +
+                `📊 Version: ${response.data.version || '1.0.0'}\n` +
+                `🕒 Uptime: ${response.data.timestamp || 'Active'}\n\n` +
+                `*Endpoints:*\n` +
+                `• /api/stream - Main streaming\n` +
+                `• /api/proxy - Fast proxy\n` +
+                `• /api/ping - Health check\n\n` +
+                `*Ready for movie streaming!* 🎬`);
+    
+  } catch (error) {
+    await reply(`*🌍 VERCEL STREAMING STATUS*\n\n` +
+                `❌ Status: OFFLINE\n` +
+                `🔗 URL: ${VERCEL_URL}\n` +
+                `⚠️ Error: ${error.message}\n\n` +
+                `*Please check:*\n` +
+                `1. Vercel deployment status\n` +
+                `2. Internet connection\n` +
+                `3. VERCEL_URL in plugin config`);
+  }
 });
 
-/* ================= CLEANUP ================= */
+/* ================= CLEAR CACHE COMMAND ================= */
+cmd({
+  pattern: "clearmovie",
+  alias: ["movieclear"],
+  react: "🧹",
+  desc: "Clear movie cache and sessions",
+  category: "download",
+  filename: __filename
+}, async (danuwa, mek, m, { from, sender, reply }) => {
+  
+  // Clear caches
+  searchCache.clear();
+  metadataCache.clear();
+  userSessions.delete(sender);
+  
+  await reply(`*🧹 Cache Cleared*\n\n` +
+              `✅ Search cache cleared\n` +
+              `✅ Metadata cache cleared\n` +
+              `✅ Your session cleared\n\n` +
+              `All caches have been reset.`);
+});
+
+// ========== CLEANUP ROUTINE ==========
 setInterval(() => {
   const now = Date.now();
-  const timeout = 10 * 60 * 1000;
+  const sessionTTL = 30 * 60 * 1000; // 30 minutes
   
-  for (const s in pendingSearch) {
-    if (now - pendingSearch[s].timestamp > timeout) {
-      delete pendingSearch[s];
+  // Cleanup user sessions
+  for (const [userId, session] of userSessions) {
+    if (now - session.timestamp > sessionTTL) {
+      userSessions.delete(userId);
+      console.log(`🧹 Cleaned expired session: ${userId}`);
     }
   }
   
-  for (const s in pendingQuality) {
-    if (now - pendingQuality[s].timestamp > timeout) {
-      delete pendingQuality[s];
+  // Cleanup search cache
+  for (const [key, data] of searchCache) {
+    if (now - data.timestamp > CACHE_TTL) {
+      searchCache.delete(key);
     }
   }
-}, 2 * 60 * 1000);
+  
+  // Cleanup metadata cache
+  for (const [key, data] of metadataCache) {
+    if (now - data.timestamp > CACHE_TTL) {
+      metadataCache.delete(key);
+    }
+  }
+}, 5 * 60 * 1000); // Run every 5 minutes
 
-module.exports = { 
-  pendingSearch, 
-  pendingQuality,
-  memoryMonitor,
-  streamViaCloudflare,
-  directDownload
+// ========== MODULE EXPORTS ==========
+module.exports = {
+  userSessions,
+  searchCache,
+  metadataCache,
+  VERCEL_URL,
+  getStreamUrl
 };
