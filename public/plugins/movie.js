@@ -35,10 +35,35 @@ function getDirectPixeldrainUrl(url) {
 // Upload movie to Telegram
 async function uploadToTelegram(fileUrl) {
   try {
-    const msg = await tgBot.sendDocument(TELEGRAM_CHAT_ID, fileUrl, { caption: "🚀 Movie Uploaded" });
-    return msg.document.file_id;
+    // Try multiple URL formats
+    const formats = [
+      fileUrl.replace('pixeldrain.com/u/', 'pixeldrain.com/api/file/') + '?download',
+      fileUrl.replace('pixeldrain.com/u/', 'dl.pixeldrain.com/api/file/'),
+      fileUrl.replace('pixeldrain.com/u/', 'pixeldrain.com/l/') + '?force=true'
+    ];
+    
+    for (const format of formats) {
+      try {
+        console.log("Trying format:", format);
+        const msg = await tgBot.sendDocument(TELEGRAM_CHAT_ID, format, { 
+          caption: "🚀 Movie Uploaded",
+          disable_notification: true,
+          timeout: 60000 // 60 second timeout
+        });
+        console.log("Success with format:", format);
+        return msg.document.file_id;
+      } catch (formatErr) {
+        console.log("Format failed:", formatErr.message);
+        continue;
+      }
+    }
+    
+    // All formats failed
+    console.error("All Telegram upload attempts failed");
+    return null;
+    
   } catch (err) {
-    console.error("Telegram upload error:", err);
+    console.error("Telegram upload error:", err.message);
     return null;
   }
 }
