@@ -1,6 +1,9 @@
+// movie.js - Pixeldrain → Telegram → WhatsApp
+require('dotenv').config();
 const { cmd } = require("../command");
 const { sendButtons, sendInteractiveMessage } = require("gifted-btns");
 const puppeteer = require("puppeteer");
+const TelegramBot = require("node-telegram-bot-api");
 const config = require("../config");
 
 const pendingSearch = {};
@@ -8,6 +11,10 @@ const pendingQuality = {};
 const channelJid = '120363418166326365@newsletter'; 
 const channelName = '🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁';
 const imageUrl = "https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/film.png?raw=true";
+
+// Telegram Bot Setup
+const tgBot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: false });
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 // ---------- Helpers ----------
 function normalizeQuality(text) {
@@ -23,6 +30,17 @@ function getDirectPixeldrainUrl(url) {
   const match = url.match(/pixeldrain\.com\/u\/(\w+)/);
   if (!match) return null;
   return `https://pixeldrain.com/api/file/${match[1]}?download`;
+}
+
+// Upload movie to Telegram
+async function uploadToTelegram(fileUrl) {
+  try {
+    const msg = await tgBot.sendDocument(TELEGRAM_CHAT_ID, fileUrl, { caption: "🚀 Movie Uploaded" });
+    return msg.document.file_id;
+  } catch (err) {
+    console.error("Telegram upload error:", err);
+    return null;
+  }
 }
 
 // ---------- Movie Search ----------
@@ -145,7 +163,6 @@ cmd({
   pendingSearch[sender] = { results: searchResults, timestamp: Date.now() };
 
   if (config.BUTTON) {
-    // -------- Single Select Menu --------
     const rows = searchResults.map((movie, i) => ({
       id: `${i+1}`,
       title: movie.title,
@@ -153,96 +170,61 @@ cmd({
     }));
 
     const interactiveButtons = [
-      {
-        name: "single_select",
-        buttonParamsJson: JSON.stringify({
-          title: "Movie Search Results",
-          sections: [{ title: "Select a movie", rows }]
-        })
-      }
+      { name: "single_select", buttonParamsJson: JSON.stringify({
+        title: "Movie Search Results",
+        sections: [{ title: "Select a movie", rows }]
+      })}
     ];
 
     const caption = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
 ║     🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁    ║          
 ╚═━━━━━━━◢◤◆◥◣━━━━━━━━═╝  
-    📂 𝗠𝗢𝗩𝗜𝗘 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥 📂  
+📂 𝗠𝗢𝗩𝗜𝗘 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥 📂  
 ┏━━━━━━━━━━━━━━━━━━━━━━┓  
 ┃ 🔰 𝗖𝗛𝗢𝗢𝗦𝗘 𝗬𝗢𝗨𝗥 MOVIE         
 ┃ 💬 *FOUND ${searchResults.length} MOVIES FOR "${q}"*❕  
 ┗━━━━━━━━━━━━━━━━━━━━━━┛  
 ┃━━━━━━━━━━━━━━━━━━━━━━✦
 ┃   ⚙️ M A D E  W I T H ❤️ B Y 
-╰─🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥─╯
+╰─🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥─╯`;
 
-─────────────────────────
-`;
-    
-await danuwa.sendMessage(from, {
-  image: { url: imageUrl },
-  }, { quoted: mek });
-    
-    await sendInteractiveMessage(danuwa, from, {
-      text: caption,
-      interactiveButtons,
-      quoted: mek
-    });
+    await danuwa.sendMessage(from, { image: { url: imageUrl } }, { quoted: mek });
+    await sendInteractiveMessage(danuwa, from, { text: caption, interactiveButtons, quoted: mek });
 
   } else {
-    // -------- Plain Text Reply --------
-  const numberEmojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
-  let filmListMessage = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
+    const numberEmojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
+    let filmListMessage = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
 ║     🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁    ║          
 ╚═━━━━━━━◢◤◆◥◣━━━━━━━━═╝  
-    📂 𝗠𝗢𝗩𝗜𝗘 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥 📂  
+📂 𝗠𝗢𝗩𝗜𝗘 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥 📂  
 ┏━━━━━━━━━━━━━━━━━━━━━━┓  
 ┃ 🔰 𝗖𝗛𝗢𝗢𝗦𝗘 𝗬𝗢𝗨𝗥 MOVIE         
 ┃ 💬 *FOUND ${searchResults.length} MOVIES FOR "${q}"*❕    
 ┗━━━━━━━━━━━━━━━━━━━━━━┛  
 ┃━━━━━━━━━━━━━━━━━━━━━━✦
 ┃   ⚙️ M A D E  W I T H ❤️ B Y 
-╰─🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥─╯
+╰─🔥 𝘿𝘼𝙉𝙐𝙆𝘼 𝘿𝙄𝙎𝘼𝙉𝘼𝙔𝘼𝙆𝘼 🔥─╯`;
 
-─────────────────────────`;
+    searchResults.forEach((movie, index) => {
+      let adjustedIndex = index + 1;
+      let emojiIndex = adjustedIndex.toString().split("").map(num => numberEmojis[num]).join("");
+      filmListMessage += `${emojiIndex} *${movie.title}*\n\n`;
+    });
+    filmListMessage += `*📝 Reply with movie number (1-${searchResults.length})*`;
 
-  searchResults.forEach((movie, index) => {
-    let adjustedIndex = index + 1;
-    let emojiIndex = adjustedIndex
-      .toString()
-      .split("")
-      .map(num => numberEmojis[num])
-      .join("");
-
-    filmListMessage += `${emojiIndex} *${movie.title}*\n\n`;
-  });
-
-  filmListMessage += `*📝 Reply with movie number (1-${searchResults.length})*`;
-
-
-
-await danuwa.sendMessage(from, {
-  image: { url: imageUrl },
-  caption: filmListMessage,
-          contextInfo: {           
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-            newsletterJid: channelJid,
-            newsletterName: channelName,
-            serverMessageId: -1
-        }
-    }
-}, { quoted: mek });
+    await danuwa.sendMessage(from, {
+      image: { url: imageUrl },
+      caption: filmListMessage,
+      contextInfo: { forwardingScore: 999, isForwarded: true, forwardedNewsletterMessageInfo: { newsletterJid: channelJid, newsletterName: channelName, serverMessageId: -1 } }
+    }, { quoted: mek });
   }
 });
 
-/* ================= COMMAND: MOVIE SELECTION ================= */
+/* ================= MOVIE SELECTION & QUALITY SELECTION ================= */
 cmd({
   filter: (text, { sender }) => pendingSearch[sender] && !isNaN(text) && parseInt(text) > 0 && parseInt(text) <= pendingSearch[sender].results.length
 }, async (danuwa, mek, m, { body, sender, reply, from }) => {
-
-    await danuwa.sendMessage(from, {
-    react: { text: "✅", key: m.key }
-  });
+  await danuwa.sendMessage(from, { react: { text: "✅", key: m.key } });
   const index = parseInt(body) - 1;
   const selected = pendingSearch[sender].results[index];
   delete pendingSearch[sender];
@@ -262,18 +244,8 @@ cmd({
 *විනාඩියක් ඉන්න Quality List එක එවනකම් 😶‍🌫️*`;
 
   if (metadata.thumbnail) {
-    await danuwa.sendMessage(from, { 
-      image: { url: metadata.thumbnail }, 
-      caption: msg,
-                contextInfo: {           
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-            newsletterJid: channelJid,
-            newsletterName: channelName,
-            serverMessageId: -1
-        }
-    }
+    await danuwa.sendMessage(from, { image: { url: metadata.thumbnail }, caption: msg,
+      contextInfo: { forwardingScore: 999, isForwarded: true, forwardedNewsletterMessageInfo: { newsletterJid: channelJid, newsletterName: channelName, serverMessageId: -1 } }
     }, { quoted: mek });
   } else {
     await danuwa.sendMessage(from, { text: msg }, { quoted: mek });
@@ -286,11 +258,9 @@ cmd({
   pendingQuality[sender] = { movie: { metadata, downloadLinks }, timestamp: Date.now() };
 
   if (config.BUTTON) {
-    // Buttons mode
     const buttons = downloadLinks.map((d, i) => ({ id: `${i+1}`, text: `💡 ${d.quality} (${d.size})` }));
     await sendButtons(danuwa, from, { text: "─────────────────────────\n *📝CHOOSE MOVIE QUALITY❕👀*\n ─────────────────────────", buttons }, { quoted: mek });
   } else {
-    // Plain text mode
     let text = `─────────────────────────
 📝CHOOSE MOVIE QUALITY❕👀
 ─────────────────────────
@@ -303,14 +273,11 @@ cmd({
   }
 });
 
-/* ================= COMMAND: QUALITY SELECTION ================= */
+/* ================= SEND MOVIE ================= */
 cmd({
   filter: (text, { sender }) => pendingQuality[sender] && !isNaN(text) && parseInt(text) > 0 && parseInt(text) <= pendingQuality[sender].movie.downloadLinks.length
 }, async (danuwa, mek, m, { body, sender, reply, from }) => {
-
-      await danuwa.sendMessage(from, {
-    react: { text: "✅", key: m.key }
-  });
+  await danuwa.sendMessage(from, { react: { text: "✅", key: m.key } });
   const index = parseInt(body) - 1;
   const { movie } = pendingQuality[sender];
   delete pendingQuality[sender];
@@ -319,9 +286,13 @@ cmd({
   reply(`*ඔයාගෙ ${selectedLink.quality} movie එක Document එකක් විදියට එවන්නම් ඉන්න 🙌*`);
 
   try {
-    const directUrl = getDirectPixeldrainUrl(selectedLink.link);
+    // Upload to Telegram
+    const telegramFileId = await uploadToTelegram(getDirectPixeldrainUrl(selectedLink.link));
+    if (!telegramFileId) return reply("*❌ Failed to upload movie to Telegram!*");
+
+    // Send to WhatsApp via Baileys using Telegram file ID
     await danuwa.sendMessage(from, {
-      document: { url: directUrl },
+      document: { url: `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${telegramFileId}` },
       mimetype: "video/mp4",
       fileName: `${movie.metadata.title.substring(0,50)} - ${selectedLink.quality}.mp4`.replace(/[^\w\s.-]/gi,''),
       caption: `───────────────────────── 
@@ -331,16 +302,9 @@ cmd({
 *💾 Size:* ${selectedLink.size}
 ─────────────────────────        
 🚀 Pow. By *DANUKA DISANAYAKA* 🔥`,
-        contextInfo: {       
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-            newsletterJid: channelJid,
-            newsletterName: channelName,
-            serverMessageId: -1
-        }
-    }
+      contextInfo: { forwardingScore: 999, isForwarded: true, forwardedNewsletterMessageInfo: { newsletterJid: channelJid, newsletterName: channelName, serverMessageId: -1 } }
     }, { quoted: mek });
+
   } catch (error) {
     console.error("Send document error:", error);
     reply(`*❌ Failed to send movie:* ${error.message || "Unknown error"}`);
