@@ -1,4 +1,4 @@
-// movie.js - Pixeldrain → Telegram → WhatsApp
+// movie.js - Pixeldrain → Telegram → WhatsApp (FIXED)
 require('dotenv').config();
 const { cmd } = require("../command");
 const { sendButtons, sendInteractiveMessage } = require("gifted-btns");
@@ -26,128 +26,51 @@ function normalizeQuality(text) {
   return text;
 }
 
-// Updated getDirectPixeldrainUrl function
 function getDirectPixeldrainUrl(url) {
   const match = url.match(/pixeldrain\.com\/u\/(\w+)/);
   if (!match) return null;
   
   const fileId = match[1];
   
-  // These are the actual working patterns
-  const urlPatterns = [
-    // Main download URL (requires Accept header)
-    `https://pixeldrain.com/api/file/${fileId}?download`,
-    
-    // Alternative with force parameter
+  // Try multiple URL formats in order of likelihood
+  const urlFormats = [
     `https://pixeldrain.com/api/file/${fileId}?download=1`,
-    
-    // Direct download with specific headers
+    `https://pixeldrain.com/api/file/${fileId}?download`,
+    `https://pixeldrain.com/l/${fileId}?download`,
+    `https://dl.pixeldrain.com/api/file/${fileId}`,
     `https://pixeldrain.com/api/file/${fileId}`
   ];
   
-  return urlPatterns;
-}
-
-// Create a custom Telegram upload with headers
-async function uploadToTelegramWithHeaders(fileUrl) {
-  try {
-    const { default: fetch } = await import('node-fetch');
-    
-    // First, get the actual download URL from Pixeldrain API
-    const apiUrl = fileUrl.includes('?') 
-      ? fileUrl 
-      : `${fileUrl}?download`;
-    
-    // Create a temporary proxy on your server
-    const express = require('express');
-    const app = express();
-    
-    return new Promise((resolve, reject) => {
-      const server = app.listen(0, '127.0.0.1', async () => {
-        const port = server.address().port;
-        const proxyUrl = `http://127.0.0.1:${port}/proxy`;
-        
-        // Set up proxy endpoint
-        app.get('/proxy', async (req, res) => {
-          try {
-            const response = await fetch(apiUrl, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0',
-                'Accept': 'video/mp4, */*',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Referer': 'https://sinhalasub.lk/',
-                'Accept-Encoding': 'identity' // Important: no compression
-              }
-            });
-            
-            // Forward headers
-            res.set('Content-Type', response.headers.get('content-type'));
-            res.set('Content-Length', response.headers.get('content-length'));
-            res.set('Content-Disposition', response.headers.get('content-disposition'));
-            
-            // Pipe the response
-            response.body.pipe(res);
-          } catch (err) {
-            res.status(500).send('Proxy error');
-          }
-        });
-        
-        try {
-          // Now Telegram will fetch from your local proxy
-          const msg = await tgBot.sendDocument(TELEGRAM_CHAT_ID, proxyUrl, {
-            caption: "🚀 Movie Uploaded",
-            timeout: 120000 // 2 minutes
-          });
-          
-          server.close();
-          resolve(msg.document.file_id);
-        } catch (err) {
-          server.close();
-          reject(err);
-        }
-      });
-    });
-    
-  } catch (err) {
-    console.error("Upload error:", err);
-    return null;
-  }
+  return urlFormats;
 }
 
 // Upload movie to Telegram
-async function uploadToTelegram(fileUrl) {
-  try {
-    // Try multiple URL formats
-    const formats = [
-      fileUrl.replace('pixeldrain.com/u/', 'pixeldrain.com/api/file/') + '?download',
-      fileUrl.replace('pixeldrain.com/u/', 'dl.pixeldrain.com/api/file/'),
-      fileUrl.replace('pixeldrain.com/u/', 'pixeldrain.com/l/') + '?force=true'
-    ];
-    
-    for (const format of formats) {
-      try {
-        console.log("Trying format:", format);
-        const msg = await tgBot.sendDocument(TELEGRAM_CHAT_ID, format, { 
-          caption: "🚀 Movie Uploaded",
-          disable_notification: true,
-          timeout: 60000 // 60 second timeout
-        });
-        console.log("Success with format:", format);
-        return msg.document.file_id;
-      } catch (formatErr) {
-        console.log("Format failed:", formatErr.message);
-        continue;
-      }
-    }
-    
-    // All formats failed
-    console.error("All Telegram upload attempts failed");
-    return null;
-    
-  } catch (err) {
-    console.error("Telegram upload error:", err.message);
+async function uploadToTelegram(fileUrlFormats) {
+  if (!fileUrlFormats || !Array.isArray(fileUrlFormats)) {
+    console.error("Invalid fileUrlFormats:", fileUrlFormats);
     return null;
   }
+  
+  for (const url of fileUrlFormats) {
+    try {
+      console.log("📤 Trying Telegram upload with:", url);
+      
+      const msg = await tgBot.sendDocument(TELEGRAM_CHAT_ID, url, {
+        caption: "🚀 Movie Uploaded via DANUWA-MD",
+        timeout: 180000, // 3 minutes
+        disable_notification: true
+      });
+      
+      console.log("✅ Telegram upload successful!");
+      return msg.document.file_id;
+    } catch (err) {
+      console.log(`❌ Failed: ${err.message}`);
+      // Continue to next URL
+    }
+  }
+  
+  console.error("❌ All Telegram upload attempts failed");
+  return null;
 }
 
 // ---------- Movie Search ----------
@@ -235,20 +158,31 @@ async function getPixeldrainLinks(movieUrl) {
     try {
       const sub = await browser.newPage();
       await sub.goto(l.pageLink, { waitUntil: "networkidle2", timeout: 30000 });
-      await new Promise(r => setTimeout(r, 12000));
+      await new Promise(r => setTimeout(r, 8000)); // Reduced from 12s to 8s
+      
       const finalUrl = await sub.$eval(".wait-done a[href^='https://pixeldrain.com/']", el => el.href).catch(() => null);
+      
       if (finalUrl) {
         let sizeMB = 0;
         const sizeText = l.size.toUpperCase();
         if (sizeText.includes("GB")) sizeMB = parseFloat(sizeText) * 1024;
         else if (sizeText.includes("MB")) sizeMB = parseFloat(sizeText);
-        if (sizeMB <= 2048) {
-          links.push({ link: finalUrl, quality: normalizeQuality(l.quality), size: l.size });
+        
+        if (sizeMB <= 2048) { // 2GB limit
+          links.push({
+            link: finalUrl,
+            quality: normalizeQuality(l.quality),
+            size: l.size,
+            originalQuality: l.quality
+          });
         }
       }
       await sub.close();
-    } catch {}
+    } catch (err) {
+      console.log("Error getting link:", err.message);
+    }
   }
+  
   await browser.close();
   return links;
 }
@@ -301,7 +235,7 @@ cmd({
   } else {
     const numberEmojis = ["0️⃣","1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣"];
     let filmListMessage = `╔═━━━━━━━◥◣◆◢◤━━━━━━━━═╗  
-║     🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁    ║          
+║     🍁 ＤＡＮ𝑼𝑾𝑨－ 〽️Ｄ 🍁    ║          
 ╚═━━━━━━━◢◤◆◥◣━━━━━━━━═╝  
 📂 𝗠𝗢𝗩𝗜𝗘 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥 📂  
 ┏━━━━━━━━━━━━━━━━━━━━━━┓  
@@ -336,7 +270,7 @@ cmd({
   const selected = pendingSearch[sender].results[index];
   delete pendingSearch[sender];
 
-  reply("*පොඩ්ඩක් ඉදහම් Film එකේ විස්තර ටික එවන්නම්...👀❤️‍🩹*");
+  reply("*⏳ Getting movie details...*");
   const metadata = await getMovieMetadata(selected.movieUrl);
 
   let msg = `───────────────────────── 
@@ -348,12 +282,10 @@ cmd({
 *🎭 Genres:* ${metadata.genres.join(", ")}
 *🎥 Directors:* ${metadata.directors.join(", ")}
 ───────────────────────── 
-*විනාඩියක් ඉන්න Quality List එක එවනකම් 😶‍🌫️*`;
+*🔍 Fetching download links...*`;
 
   if (metadata.thumbnail) {
-    await danuwa.sendMessage(from, { image: { url: metadata.thumbnail }, caption: msg,
-      contextInfo: { forwardingScore: 999, isForwarded: true, forwardedNewsletterMessageInfo: { newsletterJid: channelJid, newsletterName: channelName, serverMessageId: -1 } }
-    }, { quoted: mek });
+    await danuwa.sendMessage(from, { image: { url: metadata.thumbnail }, caption: msg }, { quoted: mek });
   } else {
     await danuwa.sendMessage(from, { text: msg }, { quoted: mek });
   }
@@ -365,17 +297,23 @@ cmd({
   pendingQuality[sender] = { movie: { metadata, downloadLinks }, timestamp: Date.now() };
 
   if (config.BUTTON) {
-    const buttons = downloadLinks.map((d, i) => ({ id: `${i+1}`, text: `💡 ${d.quality} (${d.size})` }));
-    await sendButtons(danuwa, from, { text: "─────────────────────────\n *📝CHOOSE MOVIE QUALITY❕👀*\n ─────────────────────────", buttons }, { quoted: mek });
+    const buttons = downloadLinks.map((d, i) => ({ 
+      id: `${i+1}`, 
+      text: `🎬 ${d.quality} (${d.size})` 
+    }));
+    await sendButtons(danuwa, from, { 
+      text: `─────────────────────────\n*📝 CHOOSE QUALITY (${downloadLinks.length} options)*\n─────────────────────────`, 
+      buttons 
+    }, { quoted: mek });
   } else {
     let text = `─────────────────────────
-📝CHOOSE MOVIE QUALITY❕👀
+📝 CHOOSE QUALITY (${downloadLinks.length} options)
 ─────────────────────────
 `;
     downloadLinks.forEach((d, i) => {
-      text += `${i+1}. ${d.quality} (${d.size})\n`;
+      text += `${i+1}. 🎬 ${d.quality} (${d.size})\n`;
     });
-    text += `\n*Reply with the number (1-${downloadLinks.length})*`;
+    text += `\n*📝 Reply with number (1-${downloadLinks.length})*`;
     reply(text);
   }
 });
@@ -390,16 +328,60 @@ cmd({
   delete pendingQuality[sender];
 
   const selectedLink = movie.downloadLinks[index];
-  reply(`*ඔයාගෙ ${selectedLink.quality} movie එක Document එකක් විදියට එවන්නම් ඉන්න 🙌*`);
+  
+  // Show processing message
+  await reply(`*📤 Processing ${selectedLink.quality} quality...*\n_This may take a few minutes_`);
 
   try {
-    // Upload to Telegram
-    const telegramFileId = await uploadToTelegram(getDirectPixeldrainUrl(selectedLink.link));
-    if (!telegramFileId) return reply("*❌ Failed to upload movie to Telegram!*");
+    // Get multiple URL formats
+    const pixeldrainUrls = getDirectPixeldrainUrl(selectedLink.link);
+    
+    if (!pixeldrainUrls || pixeldrainUrls.length === 0) {
+      throw new Error("Could not generate download URLs");
+    }
+    
+    // Try Telegram upload
+    const telegramFileId = await uploadToTelegram(pixeldrainUrls);
+    
+    if (!telegramFileId) {
+      // Telegram failed, send direct link
+      const directLinkMessage = `───────────────────────── 
+*🎬 ${movie.metadata.title}*
+───────────────────────── 
+*📊 Quality:* ${selectedLink.quality}
+*💾 Size:* ${selectedLink.size}
+*🔗 Direct Link:* ${selectedLink.link}
+─────────────────────────        
+📥 *How to download:*
+1. Open the link above
+2. Click "Download" button
+3. Save the file
 
-    // Send to WhatsApp via Baileys using Telegram file ID
+⚠️ *Telegram upload failed. Please download directly.*
+🚀 Pow. By *DANUKA DISANAYAKA* 🔥`;
+      
+      await danuwa.sendMessage(from, {
+        text: directLinkMessage,
+        contextInfo: { 
+          forwardingScore: 999, 
+          isForwarded: true, 
+          forwardedNewsletterMessageInfo: { 
+            newsletterJid: channelJid, 
+            newsletterName: channelName, 
+            serverMessageId: -1 
+          } 
+        }
+      }, { quoted: mek });
+      return;
+    }
+    
+    // Telegram success! Send to WhatsApp
+    await reply(`*✅ Uploaded to Telegram!*\n_Sending to WhatsApp now..._`);
+    
     await danuwa.sendMessage(from, {
-      document: { url: `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${telegramFileId}` },
+      document: { 
+        url: `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getFile?file_id=${telegramFileId}` 
+      },
       mimetype: "video/mp4",
       fileName: `${movie.metadata.title.substring(0,50)} - ${selectedLink.quality}.mp4`.replace(/[^\w\s.-]/gi,''),
       caption: `───────────────────────── 
@@ -409,12 +391,20 @@ cmd({
 *💾 Size:* ${selectedLink.size}
 ─────────────────────────        
 🚀 Pow. By *DANUKA DISANAYAKA* 🔥`,
-      contextInfo: { forwardingScore: 999, isForwarded: true, forwardedNewsletterMessageInfo: { newsletterJid: channelJid, newsletterName: channelName, serverMessageId: -1 } }
+      contextInfo: { 
+        forwardingScore: 999, 
+        isForwarded: true, 
+        forwardedNewsletterMessageInfo: { 
+          newsletterJid: channelJid, 
+          newsletterName: channelName, 
+          serverMessageId: -1 
+        } 
+      }
     }, { quoted: mek });
 
   } catch (error) {
-    console.error("Send document error:", error);
-    reply(`*❌ Failed to send movie:* ${error.message || "Unknown error"}`);
+    console.error("Send movie error:", error);
+    await reply(`*❌ Error:* ${error.message || "Failed to send movie"}\n\nTry using the direct link or try another quality.`);
   }
 });
 
