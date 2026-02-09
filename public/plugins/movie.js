@@ -26,10 +26,92 @@ function normalizeQuality(text) {
   return text;
 }
 
+// Updated getDirectPixeldrainUrl function
 function getDirectPixeldrainUrl(url) {
   const match = url.match(/pixeldrain\.com\/u\/(\w+)/);
   if (!match) return null;
-  return `https://pixeldrain.com/api/file/${match[1]}?download`;
+  
+  const fileId = match[1];
+  
+  // These are the actual working patterns
+  const urlPatterns = [
+    // Main download URL (requires Accept header)
+    `https://pixeldrain.com/api/file/${fileId}?download`,
+    
+    // Alternative with force parameter
+    `https://pixeldrain.com/api/file/${fileId}?download=1`,
+    
+    // Direct download with specific headers
+    `https://pixeldrain.com/api/file/${fileId}`
+  ];
+  
+  return urlPatterns;
+}
+
+// Create a custom Telegram upload with headers
+async function uploadToTelegramWithHeaders(fileUrl) {
+  try {
+    const { default: fetch } = await import('node-fetch');
+    
+    // First, get the actual download URL from Pixeldrain API
+    const apiUrl = fileUrl.includes('?') 
+      ? fileUrl 
+      : `${fileUrl}?download`;
+    
+    // Create a temporary proxy on your server
+    const express = require('express');
+    const app = express();
+    
+    return new Promise((resolve, reject) => {
+      const server = app.listen(0, '127.0.0.1', async () => {
+        const port = server.address().port;
+        const proxyUrl = `http://127.0.0.1:${port}/proxy`;
+        
+        // Set up proxy endpoint
+        app.get('/proxy', async (req, res) => {
+          try {
+            const response = await fetch(apiUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0',
+                'Accept': 'video/mp4, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://sinhalasub.lk/',
+                'Accept-Encoding': 'identity' // Important: no compression
+              }
+            });
+            
+            // Forward headers
+            res.set('Content-Type', response.headers.get('content-type'));
+            res.set('Content-Length', response.headers.get('content-length'));
+            res.set('Content-Disposition', response.headers.get('content-disposition'));
+            
+            // Pipe the response
+            response.body.pipe(res);
+          } catch (err) {
+            res.status(500).send('Proxy error');
+          }
+        });
+        
+        try {
+          // Now Telegram will fetch from your local proxy
+          const msg = await tgBot.sendDocument(TELEGRAM_CHAT_ID, proxyUrl, {
+            caption: "🚀 Movie Uploaded",
+            timeout: 120000 // 2 minutes
+          });
+          
+          server.close();
+          resolve(msg.document.file_id);
+        } catch (err) {
+          server.close();
+          reject(err);
+        }
+      });
+    });
+    
+  } catch (err) {
+    console.error("Upload error:", err);
+    return null;
+  }
 }
 
 // Upload movie to Telegram
