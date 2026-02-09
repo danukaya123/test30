@@ -5,7 +5,7 @@ const cheerio = require("cheerio");
 const config = require("../config");
 
 // ========== VERCEL CONFIG ==========
-const VERCEL_URL = 'https://your-vercel-app.vercel.app'; // ⚠️ CHANGE THIS
+const VERCEL_URL = 'https://test5689.vercel.app'; // ⚠️ CHANGE THIS
 
 const pendingSearch = {};
 const pendingQuality = {};
