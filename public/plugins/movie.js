@@ -5,6 +5,8 @@ const { sendButtons, sendInteractiveMessage } = require("gifted-btns");
 const puppeteer = require("puppeteer");
 const TelegramBot = require("node-telegram-bot-api");
 const config = require("../config");
+const FormData = require('form-data');
+const axios = require('axios');
 
 const pendingSearch = {};
 const pendingQuality = {};
@@ -47,48 +49,55 @@ function getDirectPixeldrainUrl(url) {
 // Upload movie to Telegram
 async function uploadToTelegram(fileId) {
   try {
-    // Try different proxy services with longer timeouts
-    const proxyConfigs = [
-      {
-        url: `https://api.codetabs.com/v1/proxy?quest=https://pixeldrain.com/api/file/${fileId}?download=1`,
-        timeout: 300000 // 5 minutes
-      },
-      {
-        url: `https://allorigins.win/raw?url=${encodeURIComponent(`https://pixeldrain.com/api/file/${fileId}?download=1`)}`,
-        timeout: 300000
-      },
-      {
-        url: `https://cors-anywhere.herokuapp.com/https://pixeldrain.com/api/file/${fileId}?download=1`,
-        timeout: 300000
-      },
-      {
-        url: `https://proxy.cors.sh/https://pixeldrain.com/api/file/${fileId}?download=1`,
-        headers: { 'x-cors-api-key': 'temp_xxxxxxxx' } // Get from cors.sh
-      }
-    ];
+    console.log("🔄 Downloading from Pixeldrain...");
     
-    for (const config of proxyConfigs) {
-      try {
-        console.log("📤 Trying proxy:", config.url);
-        
-        const msg = await tgBot.sendDocument(TELEGRAM_CHAT_ID, config.url, {
-          caption: "🚀 Movie via DANUWA-MD",
-          timeout: config.timeout || 300000, // 5 minutes timeout
-          disable_notification: true
-        });
-        
-        console.log("✅ Success with proxy!");
-        return msg.document.file_id;
-      } catch (err) {
-        console.log("❌ Proxy failed:", err.message);
-        continue;
+    // Download file as stream
+    const response = await axios({
+      url: `https://pixeldrain.com/api/file/${fileId}?download=1`,
+      method: 'GET',
+      responseType: 'stream',
+      headers: {
+        'User-Agent': 'TelegramBot',
+        'Accept': 'video/mp4',
+        'Referer': 'https://sinhalasub.lk/'
+      },
+      timeout: 300000
+    });
+    
+    // Create form data
+    const form = new FormData();
+    form.append('chat_id', TELEGRAM_CHAT_ID);
+    form.append('document', response.data, {
+      filename: `${fileId}.mp4`,
+      contentType: 'video/mp4'
+    });
+    form.append('caption', '🚀 Movie via DANUWA-MD');
+    
+    console.log("📤 Sending to Telegram API...");
+    
+    // Send directly to Telegram API
+    const telegramResponse = await axios.post(
+      `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendDocument`,
+      form,
+      {
+        headers: {
+          ...form.getHeaders(),
+          'Content-Length': response.headers['content-length']
+        },
+        timeout: 300000,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
       }
+    );
+    
+    if (telegramResponse.data.ok) {
+      console.log("✅ Telegram API success!");
+      return telegramResponse.data.result.document.file_id;
     }
     
-    console.error("❌ All proxies failed");
     return null;
   } catch (err) {
-    console.error("Telegram upload error:", err);
+    console.error("❌ Direct API error:", err.response?.data || err.message);
     return null;
   }
 }
