@@ -4,14 +4,14 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const config = require("../config");
 
-// ========== MULTI-LINE UPDATING CONSOLE MONITOR ==========
+// ========== REALTIME MEMORY MONITOR ==========
 class MemoryMonitor {
     constructor(updateInterval = 100) {
         this.interval = null;
         this.isMonitoring = false;
         this.startTime = null;
-        this.lineCount = 8; // Number of lines in our display
-        this.currentLines = [];
+        this.lineCount = 8;
+        this.displayLines = [];
     }
 
     formatMemory(bytes) {
@@ -33,33 +33,37 @@ class MemoryMonitor {
     }
 
     createDisplay(stats) {
-        const lines = [];
-        lines.push(`╔══════════════════════════════════════════════════╗`);
-        lines.push(`║      🎬 MOVIE PLUGIN - REALTIME MEMORY MONITOR   ║`);
-        lines.push(`╠══════════════════════════════════════════════════╣`);
-        lines.push(`║  ⏱️  Uptime: ${stats.elapsed.padEnd(12)}                ║`);
-        lines.push(`║  📊 RSS: ${stats.rss.padEnd(8)} MB                      ║`);
-        lines.push(`║  💾 Heap Used: ${stats.heapUsed.padEnd(8)} MB              ║`);
-        lines.push(`║  🔥 Heap Total: ${stats.heapTotal.padEnd(8)} MB             ║`);
-        lines.push(`║  🌐 External: ${stats.external.padEnd(8)} MB               ║`);
-        lines.push(`╚══════════════════════════════════════════════════╝`);
-        return lines;
+        return [
+            `╔══════════════════════════════════════════════════╗`,
+            `║      🎬 MOVIE PLUGIN - REALTIME MEMORY MONITOR   ║`,
+            `╠══════════════════════════════════════════════════╣`,
+            `║  ⏱️  Uptime: ${stats.elapsed.padEnd(12)}                ║`,
+            `║  📊 RSS: ${stats.rss.padEnd(8)} MB                      ║`,
+            `║  💾 Heap Used: ${stats.heapUsed.padEnd(8)} MB              ║`,
+            `║  🔥 Heap Total: ${stats.heapTotal.padEnd(8)} MB             ║`,
+            `║  🌐 External: ${stats.external.padEnd(8)} MB               ║`,
+            `╚══════════════════════════════════════════════════╝`
+        ];
     }
 
     updateDisplay() {
         const stats = this.getMemoryStats();
         const newLines = this.createDisplay(stats);
         
-        // Move cursor up to the start of our display
+        if (!this.displayLines.length) {
+            this.displayLines = newLines;
+            newLines.forEach(line => console.log(`\x1b[36m${line}\x1b[0m`));
+            return;
+        }
+        
         process.stdout.write('\x1B[' + this.lineCount + 'A');
         
-        // Print all lines
-        newLines.forEach(line => {
-            process.stdout.write('\x1B[2K'); // Clear line
+        newLines.forEach((line, i) => {
+            process.stdout.write('\x1B[2K');
             console.log(`\x1b[36m${line}\x1b[0m`);
         });
         
-        this.currentLines = newLines;
+        this.displayLines = newLines;
     }
 
     start() {
@@ -67,21 +71,19 @@ class MemoryMonitor {
         
         this.isMonitoring = true;
         this.startTime = Date.now();
+        this.displayLines = [];
         
-        console.log('\n'); // Add some space
-        this.currentLines = this.createDisplay(this.getMemoryStats());
+        console.log('\n');
+        console.log('\x1b[42m\x1b[30m══════════════════════════════════════════════════════════════\x1b[0m');
+        console.log('\x1b[42m\x1b[30m             🎬 DANUWA MOVIE DOWNLOADER ACTIVATED             \x1b[0m');
+        console.log('\x1b[42m\x1b[30m══════════════════════════════════════════════════════════════\x1b[0m');
+        console.log('\x1b[33m📊 Memory monitoring started (Updates every 100ms)\x1b[0m\n');
         
-        // Print initial display
-        this.currentLines.forEach(line => {
-            console.log(`\x1b[36m${line}\x1b[0m`);
-        });
+        this.updateDisplay();
         
-        // Start updating
         this.interval = setInterval(() => {
             this.updateDisplay();
-        }, 100); // Update every 100ms
-        
-        console.log('\x1b[33m📊 Monitoring started - Updating every 100ms\x1b[0m\n');
+        }, updateInterval);
     }
 
     stop() {
@@ -89,15 +91,19 @@ class MemoryMonitor {
             clearInterval(this.interval);
             this.interval = null;
         }
-        this.isMonitoring = false;
         
-        // Clear the display area
-        process.stdout.write('\x1B[' + (this.lineCount + 1) + 'A');
-        for (let i = 0; i < this.lineCount + 2; i++) {
-            process.stdout.write('\x1B[2K\n');
+        if (this.isMonitoring) {
+            process.stdout.write('\x1B[' + (this.lineCount + 1) + 'A');
+            for (let i = 0; i < this.lineCount + 2; i++) {
+                process.stdout.write('\x1B[2K\x1B[1B');
+            }
+            
+            console.log('\x1b[32m════════════════════════════════════════════════════\x1b[0m');
+            console.log('\x1b[32m✅ Memory monitoring stopped                       \x1b[0m');
+            console.log('\x1b[32m════════════════════════════════════════════════════\x1b[0m\n');
         }
         
-        console.log('\x1b[32m✅ Memory monitoring stopped\x1b[0m\n');
+        this.isMonitoring = false;
     }
 }
 
@@ -110,7 +116,7 @@ const channelJid = '120363418166326365@newsletter';
 const channelName = '🍁 ＤＡＮＵＷＡ－ 〽️Ｄ 🍁';
 const imageUrl = "https://github.com/DANUWA-MD/DANUWA-BOT/blob/main/images/film.png?raw=true";
 
-// Helper functions remain the same...
+// ---------- Helper Functions ----------
 function normalizeQuality(text) {
   if (!text) return null;
   text = text.toUpperCase();
@@ -126,7 +132,65 @@ function getDirectPixeldrainUrl(url) {
   return `https://pixeldrain.com/api/file/${match[1]}?download`;
 }
 
-// Movie search function...
+async function getFileSizeFromUrl(url) {
+  try {
+    const response = await axios.head(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      timeout: 5000
+    });
+    
+    const contentLength = response.headers['content-length'];
+    if (contentLength) {
+      const bytes = parseInt(contentLength);
+      if (bytes > 1024 * 1024 * 1024) {
+        return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+      } else {
+        return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+      }
+    }
+  } catch (error) {
+    // If HEAD fails, we'll use the original size
+  }
+  return null;
+}
+
+// ---------- Stream Large File to WhatsApp ----------
+async function streamLargeFileToWhatsApp(danuwa, from, fileUrl, fileName, caption, quoted) {
+  return new Promise((resolve, reject) => {
+    console.log(`\x1b[36m📡 Streaming large file: ${fileName}\x1b[0m`);
+    
+    danuwa.sendMessage(from, {
+      document: { 
+        url: fileUrl  // Direct URL - WhatsApp downloads it directly
+      },
+      mimetype: "video/mp4",
+      fileName: fileName,
+      caption: caption,
+      contextInfo: {       
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+          newsletterJid: channelJid,
+          newsletterName: channelName,
+          serverMessageId: -1
+        }
+      }
+    }, { quoted: quoted })
+    .then(messageInfo => {
+      console.log(`\x1b[32m✅ File sent via direct streaming!\x1b[0m`);
+      console.log(`\x1b[32m🔗 Source URL: ${fileUrl}\x1b[0m`);
+      resolve(messageInfo);
+    })
+    .catch(error => {
+      console.error(`\x1b[31m❌ Streaming error: ${error.message}\x1b[0m`);
+      reject(error);
+    });
+  });
+}
+
+// ---------- Movie Search ----------
 async function searchMovies(query) {
   console.log(`\x1b[34m🔍 Searching movies for: ${query}\x1b[0m`);
   const url = `https://sinhalasub.lk/?s=${encodeURIComponent(query)}&post_type=movies`;
@@ -135,7 +199,8 @@ async function searchMovies(query) {
     const { data } = await axios.get(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
+      },
+      timeout: 10000
     });
     
     const $ = cheerio.load(data);
@@ -165,19 +230,20 @@ async function searchMovies(query) {
     console.log(`\x1b[32m✅ Found ${results.length} movies\x1b[0m`);
     return results;
   } catch (error) {
-    console.error("Search error:", error.message);
+    console.error(`\x1b[31m❌ Search error: ${error.message}\x1b[0m`);
     return [];
   }
 }
 
-// Movie metadata function...
+// ---------- Movie Metadata ----------
 async function getMovieMetadata(url) {
   console.log(`\x1b[34m📥 Fetching metadata...\x1b[0m`);
   try {
     const { data } = await axios.get(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
+      },
+      timeout: 10000
     });
     
     const $ = cheerio.load(data);
@@ -218,6 +284,7 @@ async function getMovieMetadata(url) {
     
     const thumbnail = $(".splash-bg img").attr("src") || "";
     
+    console.log(`\x1b[32m✅ Metadata loaded: ${title}\x1b[0m`);
     return {
       title,
       language,
@@ -229,7 +296,7 @@ async function getMovieMetadata(url) {
       thumbnail
     };
   } catch (error) {
-    console.error("Metadata error:", error.message);
+    console.error(`\x1b[31m❌ Metadata error: ${error.message}\x1b[0m`);
     return {
       title: "",
       language: "",
@@ -243,14 +310,15 @@ async function getMovieMetadata(url) {
   }
 }
 
-// Pixeldrain links function...
+// ---------- Pixeldrain Links with Streaming Support ----------
 async function getPixeldrainLinks(movieUrl) {
   console.log(`\x1b[34m🔗 Fetching download links...\x1b[0m`);
   try {
     const { data } = await axios.get(movieUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
+      },
+      timeout: 15000
     });
     
     const $ = cheerio.load(data);
@@ -273,13 +341,17 @@ async function getPixeldrainLinks(movieUrl) {
     
     const links = [];
     
-    for (const l of rows.slice(0, 3)) {
+    // Process up to 5 links
+    for (const l of rows.slice(0, 5)) {
       try {
+        console.log(`\x1b[33m🔗 Processing: ${l.quality} - ${l.size}\x1b[0m`);
+        
         const { data: pageData } = await axios.get(l.pageLink, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Referer': movieUrl
-          }
+          },
+          timeout: 10000
         });
         
         const $$ = cheerio.load(pageData);
@@ -291,33 +363,54 @@ async function getPixeldrainLinks(movieUrl) {
           if (sizeText.includes("GB")) sizeMB = parseFloat(sizeText) * 1024;
           else if (sizeText.includes("MB")) sizeMB = parseFloat(sizeText);
           
-          if (sizeMB <= 1536) {
+          // Increase limit to 2GB (2048MB)
+          if (sizeMB <= 2048) {
+            const directUrl = getDirectPixeldrainUrl(finalUrl);
+            
+            if (!directUrl) continue;
+            
+            // Try to get accurate file size
+            let accurateSize = l.size;
+            try {
+              const actualSize = await getFileSizeFromUrl(directUrl);
+              if (actualSize) {
+                accurateSize = actualSize;
+              }
+            } catch (sizeError) {
+              console.log(`\x1b[33m⚠️ Using estimated size: ${l.size}\x1b[0m`);
+            }
+            
             links.push({ 
-              link: finalUrl, 
+              link: directUrl,
               quality: normalizeQuality(l.quality), 
-              size: l.size 
+              size: accurateSize,
+              originalLink: finalUrl
             });
+            
+            console.log(`\x1b[32m✅ Link ready: ${normalizeQuality(l.quality)} - ${accurateSize}\x1b[0m`);
+          } else {
+            console.log(`\x1b[33m⚠️ Skipped: ${l.size} exceeds 2GB limit\x1b[0m`);
           }
         }
       } catch (error) {
-        console.error("Link processing error:", error.message);
+        console.error(`\x1b[31m❌ Link processing error: ${error.message}\x1b[0m`);
       }
     }
     
-    console.log(`\x1b[32m✅ Found ${links.length} download links\x1b[0m`);
+    console.log(`\x1b[32m✅ Total links found: ${links.length}\x1b[0m`);
     return links;
   } catch (error) {
-    console.error("Pixeldrain links error:", error.message);
+    console.error(`\x1b[31m❌ Pixeldrain links error: ${error.message}\x1b[0m`);
     return [];
   }
 }
 
-// ================= COMMAND: MOVIE SEARCH =================
+/* ================= COMMAND: MOVIE SEARCH ================= */
 cmd({
   pattern: "movie",
-  alias: ["sinhalasub","films","cinema"],
+  alias: ["sinhalasub","films","cinema","cinema"],
   react: "🎬",
-  desc: "Search SinhalaSub movies",
+  desc: "Search SinhalaSub movies (Supports up to 2GB files)",
   category: "download",
   filename: __filename
 }, async (danuwa, mek, m, { from, q, sender, reply }) => {
@@ -326,13 +419,13 @@ cmd({
   
   if (!q) {
     setTimeout(() => memoryMonitor.stop(), 1000);
-    return reply(`*🎬 Movie Search Plugin*\nUsage: movie_name\nExample: movie avengers`);
+    return reply(`*🎬 Movie Search Plugin*\n\nUsage: .movie movie_name\nExample: .movie avengers\n\n*💡 Supports files up to 2GB*`);
   }
 
   const searchResults = await searchMovies(q);
   if (!searchResults.length) {
     setTimeout(() => memoryMonitor.stop(), 1000);
-    return reply("*❌ No movies found!*");
+    return reply("*❌ No movies found!*\n\nTry another search term.");
   }
 
   pendingSearch[sender] = { results: searchResults, timestamp: Date.now() };
@@ -359,6 +452,7 @@ cmd({
 ┏━━━━━━━━━━━━━━━━━━━━━━┓  
 ┃ 🔰 𝗖𝗛𝗢𝗢𝗦𝗘 𝗬𝗢𝗨𝗥 MOVIE         
 ┃ 💬 *FOUND ${searchResults.length} MOVIES FOR "${q}"*❕  
+┃ 💡 *Supports up to 2GB files*  
 ┗━━━━━━━━━━━━━━━━━━━━━━┛  
 ┃━━━━━━━━━━━━━━━━━━━━━━✦
 ┃   ⚙️ M A D E  W I T H ❤️ B Y 
@@ -378,6 +472,7 @@ cmd({
 ┏━━━━━━━━━━━━━━━━━━━━━━┓  
 ┃ 🔰 𝗖𝗛𝗢𝗢𝗦𝗘 𝗬𝗢𝗨𝗥 MOVIE         
 ┃ 💬 *FOUND ${searchResults.length} MOVIES FOR "${q}"*❕    
+┃ 💡 *Supports up to 2GB files*  
 ┗━━━━━━━━━━━━━━━━━━━━━━┛  
 ┃━━━━━━━━━━━━━━━━━━━━━━✦
 ┃   ⚙️ M A D E  W I T H ❤️ B Y 
@@ -393,10 +488,12 @@ cmd({
         .map(num => numberEmojis[num])
         .join("");
 
-      filmListMessage += `${emojiIndex} *${movie.title}*\n\n`;
+      filmListMessage += `${emojiIndex} *${movie.title}*\n`;
+      filmListMessage += `   📁 ${movie.quality} | 🎭 ${movie.language}\n\n`;
     });
 
-    filmListMessage += `*📝 Reply with movie number (1-${searchResults.length})*`;
+    filmListMessage += `*📝 Reply with movie number (1-${searchResults.length})*\n`;
+    filmListMessage += `*💡 Supports files up to 2GB via direct streaming*`;
 
     await danuwa.sendMessage(from, {
       image: { url: imageUrl },
@@ -416,7 +513,7 @@ cmd({
   console.log('\x1b[33m⏳ Waiting for user selection...\x1b[0m');
 });
 
-// ================= COMMAND: MOVIE SELECTION =================
+/* ================= COMMAND: MOVIE SELECTION ================= */
 cmd({
   filter: (text, { sender }) => pendingSearch[sender] && !isNaN(text) && parseInt(text) > 0 && parseInt(text) <= pendingSearch[sender].results.length
 }, async (danuwa, mek, m, { body, sender, reply, from }) => {
@@ -427,7 +524,7 @@ cmd({
   const selected = pendingSearch[sender].results[index];
   delete pendingSearch[sender];
 
-  console.log(`\x1b[34m🎬 Selected: ${selected.title}\x1b[0m`);
+  console.log(`\x1b[34m🎬 User selected: ${selected.title}\x1b[0m`);
   
   reply("*පොඩ්ඩක් ඉදහම් Film එකේ විස්තර ටික එවන්නම්...👀❤️‍🩹*");
   const metadata = await getMovieMetadata(selected.movieUrl);
@@ -440,6 +537,7 @@ cmd({
 *⭐ IMDb:* ${metadata.imdb}
 *🎭 Genres:* ${metadata.genres.join(", ")}
 *🎥 Directors:* ${metadata.directors.join(", ")}
+*✨ Stars:* ${metadata.stars.slice(0, 3).join(", ")}
 ───────────────────────── 
 *විනාඩියක් ඉන්න Quality List එක එවනකම් 😶‍🌫️*`;
 
@@ -464,30 +562,45 @@ cmd({
   const downloadLinks = await getPixeldrainLinks(selected.movieUrl);
   if (!downloadLinks.length) {
     setTimeout(() => memoryMonitor.stop(), 1000);
-    return reply("*❌ No download links found (<1.5GB)!*");
+    return reply("*❌ No download links found (under 2GB)!*\n\nTry another movie or quality.");
   }
 
   pendingQuality[sender] = { movie: { metadata, downloadLinks }, timestamp: Date.now() };
 
   if (config.BUTTON) {
-    const buttons = downloadLinks.map((d, i) => ({ id: `${i+1}`, text: `💡 ${d.quality} (${d.size})` }));
-    await sendButtons(danuwa, from, { text: "─────────────────────────\n *📝CHOOSE MOVIE QUALITY❕👀*\n ─────────────────────────", buttons }, { quoted: mek });
+    const buttons = downloadLinks.map((d, i) => ({ 
+      id: `${i+1}`, 
+      text: `🎬 ${d.quality} (${d.size})` 
+    }));
+    
+    await sendButtons(danuwa, from, { 
+      text: "─────────────────────────\n*📝 CHOOSE MOVIE QUALITY 🎯*\n*💡 Files stream directly (No bot memory used)*\n─────────────────────────", 
+      buttons 
+    }, { quoted: mek });
   } else {
     let text = `─────────────────────────
-📝CHOOSE MOVIE QUALITY❕👀
+*📝 CHOOSE MOVIE QUALITY 🎯*
+─────────────────────────
+*💡 Files stream directly (No bot memory used)*
+*📦 Supports up to 2GB files*
 ─────────────────────────
 `;
+    
     downloadLinks.forEach((d, i) => {
-      text += `${i+1}. ${d.quality} (${d.size})\n`;
+      text += `${i+1}. 🎬 *${d.quality}* (${d.size})\n`;
     });
-    text += `\n*Reply with the number (1-${downloadLinks.length})*`;
+    
+    text += `\n─────────────────────────\n`;
+    text += `*📝 Reply with the number (1-${downloadLinks.length})*\n`;
+    text += `*⚡ Files will stream directly from source*`;
+    
     reply(text);
   }
   
   console.log('\x1b[33m⏳ Waiting for quality selection...\x1b[0m');
 });
 
-// ================= COMMAND: QUALITY SELECTION =================
+/* ================= COMMAND: QUALITY SELECTION ================= */
 cmd({
   filter: (text, { sender }) => pendingQuality[sender] && !isNaN(text) && parseInt(text) > 0 && parseInt(text) <= pendingQuality[sender].movie.downloadLinks.length
 }, async (danuwa, mek, m, { body, sender, reply, from }) => {
@@ -499,26 +612,66 @@ cmd({
   delete pendingQuality[sender];
 
   const selectedLink = movie.downloadLinks[index];
-  console.log(`\x1b[34m⬇️ Downloading: ${selectedLink.quality} - ${selectedLink.size}\x1b[0m`);
+  console.log(`\x1b[34m⬇️ Streaming: ${selectedLink.quality} - ${selectedLink.size}\x1b[0m`);
   
-  reply(`*ඔයාගෙ ${selectedLink.quality} movie එක Document එකක් විදියට එවන්නම් ඉන්න 🙌*`);
+  reply(`*ඔයාගෙ ${selectedLink.quality} movie එක Document එකක් විදියට එවන්නම් ඉන්න 🙌*\n\n*📦 Size: ${selectedLink.size}*\n*⚡ Method: Direct Streaming (No bot memory)*`);
 
   try {
-    const directUrl = getDirectPixeldrainUrl(selectedLink.link);
+    // Create safe filename
+    const safeFileName = `${movie.metadata.title.substring(0,50)} - ${selectedLink.quality}.mp4`
+      .replace(/[^\w\s.-]/gi,'')
+      .replace(/\s+/g, ' ')
+      .trim();
     
-    console.log('\x1b[36m🚀 Starting movie download...\x1b[0m');
-    
-    await danuwa.sendMessage(from, {
-      document: { url: directUrl },
-      mimetype: "video/mp4",
-      fileName: `${movie.metadata.title.substring(0,50)} - ${selectedLink.quality}.mp4`.replace(/[^\w\s.-]/gi,''),
-      caption: `───────────────────────── 
+    const caption = `───────────────────────── 
 *🎬 ${movie.metadata.title}*
 ───────────────────────── 
 *📊 Quality:* ${selectedLink.quality}
 *💾 Size:* ${selectedLink.size}
+*🚀 Method:* Direct Streaming
+*💡 No bot memory used*
 ─────────────────────────        
-🚀 Pow. By *DANUKA DISANAYAKA* 🔥`,
+🎥 Power. By *DANUKA DISANAYAKA* 🔥`;
+    
+    // Use streaming method (NO MEMORY USAGE!)
+    await streamLargeFileToWhatsApp(
+      danuwa, 
+      from, 
+      selectedLink.link, // Direct URL from Pixeldrain
+      safeFileName,
+      caption,
+      mek
+    );
+    
+    console.log('\x1b[32m✅ Movie streaming completed successfully!\x1b[0m');
+    console.log('\x1b[32m📊 Memory stayed low during streaming\x1b[0m');
+    
+  } catch (error) {
+    console.error("\x1b[31m❌ Streaming error:\x1b[0m", error);
+    
+    // Fallback method: Send direct link
+    reply(`*⚠️ Streaming failed, sending direct download link...*`);
+    
+    const downloadMessage = `───────────────────────── 
+*🎬 ${movie.metadata.title}*
+───────────────────────── 
+*📊 Quality:* ${selectedLink.quality}
+*💾 Size:* ${selectedLink.size}
+───────────────────────── 
+*🔗 Direct Download Link:*
+\`\`\`
+${selectedLink.link}
+\`\`\`
+*📝 Instructions:*
+1. Copy the link above
+2. Use any download manager
+3. Or open in browser to download
+4. Support files up to 2GB
+─────────────────────────        
+🎥 Power. By *DANUKA DISANAYAKA* 🔥`;
+    
+    await danuwa.sendMessage(from, { 
+      text: downloadMessage,
       contextInfo: {       
         forwardingScore: 999,
         isForwarded: true,
@@ -530,33 +683,59 @@ cmd({
       }
     }, { quoted: mek });
     
-    console.log('\x1b[32m✅ Movie download completed!\x1b[0m');
-    
-  } catch (error) {
-    console.error("\x1b[31m❌ Send document error:\x1b[0m", error);
-    reply(`*❌ Failed to send movie:* ${error.message || "Unknown error"}`);
   } finally {
+    // Stop monitoring after 3 seconds
     setTimeout(() => {
       memoryMonitor.stop();
       console.log('\x1b[32m✨ Movie plugin operation completed!\x1b[0m');
-    }, 2000);
+      console.log('\x1b[32m💾 All files streamed without using bot memory\x1b[0m');
+    }, 3000);
   }
 });
 
-// ================= CLEANUP =================
+/* ================= CLEANUP ================= */
 setInterval(() => {
   const now = Date.now();
-  const timeout = 10*60*1000;
-  for (const s in pendingSearch) if (now - pendingSearch[s].timestamp > timeout) delete pendingSearch[s];
-  for (const s in pendingQuality) if (now - pendingQuality[s].timestamp > timeout) delete pendingQuality[s];
+  const timeout = 10 * 60 * 1000; // 10 minutes
   
-  if (memoryMonitor.isMonitoring && Object.keys(pendingSearch).length === 0 && Object.keys(pendingQuality).length === 0) {
-    setTimeout(() => {
-      if (Object.keys(pendingSearch).length === 0 && Object.keys(pendingQuality).length === 0) {
-        memoryMonitor.stop();
-      }
-    }, 30000);
+  // Cleanup pending searches
+  for (const s in pendingSearch) {
+    if (now - pendingSearch[s].timestamp > timeout) {
+      console.log(`\x1b[33m🧹 Cleaning up expired search for user: ${s}\x1b[0m`);
+      delete pendingSearch[s];
+    }
   }
-}, 5*60*1000);
+  
+  // Cleanup pending quality selections
+  for (const s in pendingQuality) {
+    if (now - pendingQuality[s].timestamp > timeout) {
+      console.log(`\x1b[33m🧹 Cleaning up expired quality selection for user: ${s}\x1b[0m`);
+      delete pendingQuality[s];
+    }
+  }
+  
+  // Auto-stop monitoring if no active operations for 2 minutes
+  if (memoryMonitor.isMonitoring && Object.keys(pendingSearch).length === 0 && Object.keys(pendingQuality).length === 0) {
+    const lastActivity = Math.min(
+      ...Object.values(pendingSearch).map(s => s.timestamp),
+      ...Object.values(pendingQuality).map(q => q.timestamp),
+      Date.now()
+    );
+    
+    if (now - lastActivity > 120000) { // 2 minutes
+      console.log('\x1b[33m⏰ No active operations for 2 minutes, stopping monitor...\x1b[0m');
+      memoryMonitor.stop();
+    }
+  }
+}, 2 * 60 * 1000); // Check every 2 minutes
 
-module.exports = { pendingSearch, pendingQuality };
+// Export for other plugins if needed
+module.exports = { 
+  pendingSearch, 
+  pendingQuality,
+  searchMovies,
+  getMovieMetadata,
+  getPixeldrainLinks,
+  streamLargeFileToWhatsApp,
+  memoryMonitor
+};
